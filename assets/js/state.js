@@ -169,8 +169,13 @@
                 nations: [],
                 logs: [],
                 currentTurn: 0,
-                maxTurn: 1000,
-                intervalId: null
+                maxTurn: Infinity,
+                intervalId: null,
+                isRunning: false,
+                isFinished: false,
+                isPausedForEvent: false,
+                nextWorldEventTurn: 100,
+                pendingWorldEventChoices: []
             },
             selectedTileInfo: null,
             turnLogs: []
