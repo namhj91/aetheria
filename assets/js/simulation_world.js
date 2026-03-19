@@ -600,6 +600,11 @@
 
         function processTurnExecution() {
             if (state.isAnimating) return;
+            ensureEntityLifeState(state.player);
+            if (state.player.isDead) {
+                showToast('사망한 상태에서는 턴을 진행할 수 없습니다.');
+                return;
+            }
 
             if (!state.turnLogs) state.turnLogs = [];
             const calInfo = getCalendarInfo(state.gameDate);
@@ -624,6 +629,7 @@
             state.player.apPool = 0;
             state.npcs.forEach(npc => npc.apPool = 0);
 
+            const prevYear = state.gameDate.year;
             state.gameDate.week++;
             if (state.gameDate.week > 4) {
                 state.gameDate.week = 1;
@@ -633,6 +639,13 @@
                     state.gameDate.year++;
                 }
             }
+            if (state.gameDate.year > prevYear) {
+                state.player.age = (parseInt(state.player.age, 10) || 0) + 1;
+                state.npcs.forEach(npc => {
+                    npc.age = (parseInt(npc.age, 10) || 0) + 1;
+                });
+            }
+            processAgingAndHealth();
             if (state.player.originType === 'isekai' && state.player.ip < 100) state.player.ip = Math.min(100, state.player.ip + 5);
             if (state.player.originType === 'possession' && state.player.pp < 100) state.player.pp = Math.min(100, state.player.pp + 5);
 
@@ -934,6 +947,50 @@
             return 20;
         }
 
+        function getOldAgeStart(race) {
+            if (race === 'human') return 65;
+            if (race === 'elf') return 240;
+            if (race === 'dragonborn') return 180;
+            if (race === 'dwarf') return 140;
+            return 70;
+        }
+
+        function ensureEntityLifeState(entity) {
+            if (!entity) return;
+            if (typeof entity.health !== 'number' || Number.isNaN(entity.health)) entity.health = 100;
+            entity.health = Math.max(0, Math.min(100, Math.floor(entity.health)));
+            if (entity.isDead === undefined) entity.isDead = false;
+            if (entity.health <= 0) entity.isDead = true;
+            if (entity.isDead) entity.status = '사망';
+        }
+
+        function processAgingAndHealth() {
+            ensureEntityLifeState(state.player);
+            state.npcs.forEach(ensureEntityLifeState);
+
+            const allEntities = [state.player, ...state.npcs];
+            allEntities.forEach(ent => {
+                if (ent.isDead) return;
+                const oldAgeStart = getOldAgeStart(ent.race);
+                if (ent.age >= oldAgeStart && Math.random() < 0.5) {
+                    ent.health = Math.max(0, ent.health - 1);
+                }
+                if (ent.health <= 0) {
+                    ent.health = 0;
+                    ent.isDead = true;
+                    ent.status = '사망';
+                    if (ent.id === state.player.id) {
+                        addTurnLog(`[노쇠] ${ent.name || '플레이어'}의 건강이 다해 사망했습니다.`);
+                        showToast('플레이어가 노쇠로 사망했습니다.');
+                    } else {
+                        addTurnLog(`[노쇠] <span class="text-blue-400 font-bold cursor-pointer hover:underline clickable-npc" data-npc-id="${ent.id}">${ent.name}</span>의 건강이 다해 사망했습니다.`);
+                    }
+                }
+            });
+
+            state.npcs = state.npcs.filter(npc => !npc.isDead);
+        }
+
         // 이름과 성씨를 분리해서 반환하도록 수정
         function generateNameParts(race, gender) {
             const rData = NAME_DATA[race] || NAME_DATA['human'];
@@ -1099,6 +1156,8 @@
                 gender,
                 race,
                 age: pStats.age,
+                health: 100,
+                isDead: false,
                 height: pStats.height,
                 weight: pStats.weight,
                 baseStats,
@@ -3397,8 +3456,6 @@
             modal.classList.remove('-translate-x-full', 'opacity-0', 'pointer-events-none');
             modal.classList.add('translate-x-0', 'opacity-100', 'pointer-events-auto');
         }
-
-
 
 
 

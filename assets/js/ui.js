@@ -750,6 +750,7 @@ function renderDungeonExplore() {
                     <div>
                         <div class="font-bold text-white text-lg">${npc.name || '무명'}</div>
                         <div class="text-xs text-slate-400">${RACES[npc.race] ? RACES[npc.race].name : '알수없음'} / ${npc.gender === 'M' ? '남성' : '여성'} / ${npc.age}세</div>
+                        <div class="text-xs text-emerald-300 mt-1">건강: ${Math.max(0, npc.health ?? 100)}</div>
                     </div>
                 </div>
                 <div class="flex justify-between border-b border-slate-700 pb-2 text-sm"><span class="text-slate-400">나에 대한 호감도</span>${favorHtml}</div>
@@ -835,11 +836,11 @@ function renderDungeonExplore() {
                         </button>
                     </div>
                 </div></div>
-                <div id="btn-title-version" class="absolute bottom-6 right-6 z-30 pointer-events-auto text-slate-600 text-xs md:text-sm font-fantasy cursor-pointer hover:text-slate-300 transition-colors">Ver 5.2 Save & Load Update</div>
+                <div id="btn-title-version" class="absolute bottom-6 right-6 z-30 pointer-events-auto text-slate-600 text-xs md:text-sm font-fantasy cursor-pointer hover:text-slate-300 transition-colors">Ver 5.3 Mobile UI & Changelog</div>
 
                 <!-- 불러오기 모달 -->
                 <div id="load-modal" class="fixed inset-0 bg-black/90 z-[300] hidden items-center justify-center p-4">
-                    <div class="bg-slate-900 border border-slate-600 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] p-6 max-w-2xl w-full flex flex-col relative text-slate-300 max-h-[80vh]">
+                    <div class="bg-slate-900 border border-slate-600 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] p-4 sm:p-6 w-[92vw] sm:w-full max-w-xl sm:max-w-2xl flex flex-col relative text-slate-300 max-h-[80vh]">
                         <button id="btn-close-load" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
                         <h3 class="text-2xl font-bold text-white mb-6 border-b border-slate-700 pb-3 flex items-center"><span class="mr-2">💾</span> 게임 불러오기</h3>
                         <div id="load-modal-content" class="flex-1 overflow-y-auto space-y-3 custom-scroll pr-2">
@@ -1430,6 +1431,8 @@ function renderDungeonExplore() {
                 height: '',
                 weight: '',
                 race: 'human',
+                health: 100,
+                isDead: false,
                 originType: chosenOrigin.type,
                 parents: chosenOrigin.parents || null,
                 baseStats: {
@@ -2741,6 +2744,7 @@ function renderDungeonExplore() {
                     <div class="flex flex-col items-center text-center mb-8">
                         ${getPortraitHtml(state.player.race, state.player.gender, state.player.portraitId || 1, RACES[state.player.race]?.icon || '🧑', 'w-32 h-32 rounded-lg mb-4')}
                         <div class="text-3xl font-black text-white mb-1">${state.player.name}</div>                        <div class="text-base text-slate-400">${RACES[state.player.race] ? RACES[state.player.race].name : '알수없음'} / ${state.player.gender === 'M' ? '남성' : '여성'} / ${state.player.age}세</div>
+                        <div class="text-sm text-emerald-300 mt-1">건강: ${Math.max(0, state.player.health ?? 100)}</div>
                         <div class="text-base text-slate-400 mt-1">${state.player.height}cm / ${state.player.weight}kg</div>
                     </div>
                     
