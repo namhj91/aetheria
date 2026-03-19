@@ -37,6 +37,8 @@
                 height: '',
                 weight: '',
                 race: 'human',
+                health: 100,
+                isDead: false,
                 originType: null,
                 parents: null,
                 baseStats: {

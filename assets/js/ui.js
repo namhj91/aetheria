@@ -750,6 +750,7 @@ function renderDungeonExplore() {
                     <div>
                         <div class="font-bold text-white text-lg">${npc.name || '무명'}</div>
                         <div class="text-xs text-slate-400">${RACES[npc.race] ? RACES[npc.race].name : '알수없음'} / ${npc.gender === 'M' ? '남성' : '여성'} / ${npc.age}세</div>
+                        <div class="text-xs text-emerald-300 mt-1">건강: ${Math.max(0, npc.health ?? 100)}</div>
                     </div>
                 </div>
                 <div class="flex justify-between border-b border-slate-700 pb-2 text-sm"><span class="text-slate-400">나에 대한 호감도</span>${favorHtml}</div>
@@ -1430,6 +1431,8 @@ function renderDungeonExplore() {
                 height: '',
                 weight: '',
                 race: 'human',
+                health: 100,
+                isDead: false,
                 originType: chosenOrigin.type,
                 parents: chosenOrigin.parents || null,
                 baseStats: {
@@ -2741,6 +2744,7 @@ function renderDungeonExplore() {
                     <div class="flex flex-col items-center text-center mb-8">
                         ${getPortraitHtml(state.player.race, state.player.gender, state.player.portraitId || 1, RACES[state.player.race]?.icon || '🧑', 'w-32 h-32 rounded-lg mb-4')}
                         <div class="text-3xl font-black text-white mb-1">${state.player.name}</div>                        <div class="text-base text-slate-400">${RACES[state.player.race] ? RACES[state.player.race].name : '알수없음'} / ${state.player.gender === 'M' ? '남성' : '여성'} / ${state.player.age}세</div>
+                        <div class="text-sm text-emerald-300 mt-1">건강: ${Math.max(0, state.player.health ?? 100)}</div>
                         <div class="text-base text-slate-400 mt-1">${state.player.height}cm / ${state.player.weight}kg</div>
                     </div>
                     
