@@ -2724,7 +2724,9 @@
             state.history.logs.unshift(logMsg);
             if (typeof showToast === 'function') {
                 const toastMsg = String(logMsg).replace(/<[^>]*>/g, '');
-                showToast(toastMsg);
+                showToast(toastMsg, false, {
+                    variant: 'history-log'
+                });
             }
             state.history.currentTurn += chunk;
             renderHistoryUI();
@@ -2739,7 +2741,7 @@
             }
 
             if (state.history.isRunning && !state.history.isPausedForEvent) {
-                state.history.intervalId = setTimeout(stepHistorySimulation, 100);
+                state.history.intervalId = setTimeout(stepHistorySimulation, 180);
             }
         }
 
@@ -2750,7 +2752,7 @@
             state.history.isPausedForEvent = false;
             renderHistoryUI();
             if (state.history.isRunning) {
-                state.history.intervalId = setTimeout(stepHistorySimulation, 120);
+                state.history.intervalId = setTimeout(stepHistorySimulation, 220);
             }
         }
 
@@ -3584,7 +3586,6 @@
             modal.classList.remove('-translate-x-full', 'opacity-0', 'pointer-events-none');
             modal.classList.add('translate-x-0', 'opacity-100', 'pointer-events-auto');
         }
-
 
 
 
