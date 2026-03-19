@@ -2722,6 +2722,10 @@
 
             if (disaster) state.history.logs.unshift('[' + startYear + '~' + endYear + '] ' + disaster.log);
             state.history.logs.unshift(logMsg);
+            if (typeof showToast === 'function') {
+                const toastMsg = String(logMsg).replace(/<[^>]*>/g, '');
+                showToast(toastMsg);
+            }
             state.history.currentTurn += chunk;
             renderHistoryUI();
 
@@ -3580,7 +3584,6 @@
             modal.classList.remove('-translate-x-full', 'opacity-0', 'pointer-events-none');
             modal.classList.add('translate-x-0', 'opacity-100', 'pointer-events-auto');
         }
-
 
 
 

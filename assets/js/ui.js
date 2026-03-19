@@ -1247,8 +1247,33 @@ function renderDungeonExplore() {
         }
 
         function renderHistoryLayout() {
-            appEl.innerHTML = `<div class="min-h-screen flex flex-col bg-slate-900 animate-fade-in h-screen overflow-hidden"><div class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center shadow-md z-20 shrink-0"><div><h2 class="text-xl font-bold text-white tracking-widest font-fantasy">역사 시뮬레이션</h2><p class="text-xs text-slate-400 mt-1">10년 단위로 진행되며, 100년마다 월드 이벤트를 선택합니다.</p></div><div class="flex items-center space-x-4"><div class="text-blue-400 font-bold" id="ui-history-progress">진행 중: 0년</div><button id="btn-history-end" class="px-4 py-1.5 bg-rose-700 hover:bg-rose-600 text-white text-sm rounded transition-colors">시뮬 종료</button><button id="btn-enter-origin" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded shadow-[0_0_10px_rgba(37,99,235,0.5)] transition-all hidden">태생 선택</button></div></div><div class="flex flex-1 overflow-hidden"><div class="w-1/3 bg-slate-900 border-r border-slate-700 p-4 overflow-y-auto flex flex-col gap-3" id="history-logs-container"><div class="text-slate-500 text-sm text-center py-4 border border-dashed border-slate-700 rounded">대륙의 역사가 시작되었습니다...</div></div><div id="map-wrapper" class="w-2/3 relative overflow-auto bg-black map-container"><div class="relative inline-block leading-none"><canvas id="world-canvas" class="block"></canvas><canvas id="player-canvas" class="absolute top-0 left-0 pointer-events-none"></canvas></div><div id="history-world-event-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-20 p-6"></div></div></div></div>`;
+            appEl.innerHTML = `<div class="min-h-screen flex flex-col bg-slate-900 animate-fade-in h-screen overflow-hidden"><div class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center shadow-md z-20 shrink-0"><div><h2 class="text-xl font-bold text-white tracking-widest font-fantasy">역사 시뮬레이션</h2><p class="text-xs text-slate-400 mt-1">10년 단위로 진행되며, 100년마다 월드 이벤트를 선택합니다.</p></div><div class="flex items-center space-x-2 md:space-x-4"><div class="text-blue-400 font-bold" id="ui-history-progress">진행 중: 0년</div><button id="btn-history-log" class="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors">로그 보기</button><button id="btn-history-end" class="px-4 py-1.5 bg-rose-700 hover:bg-rose-600 text-white text-sm rounded transition-colors">시뮬 종료</button><button id="btn-enter-origin" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded shadow-[0_0_10px_rgba(37,99,235,0.5)] transition-all hidden">태생 선택</button></div></div><div class="flex flex-1 overflow-hidden"><div id="map-wrapper" class="w-full relative overflow-auto bg-black map-container"><div class="relative inline-block leading-none"><canvas id="world-canvas" class="block"></canvas><canvas id="player-canvas" class="absolute top-0 left-0 pointer-events-none"></canvas></div><div id="history-world-event-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-20 p-6"></div></div></div><div id="history-log-modal" class="fixed inset-0 bg-black/80 z-[250] hidden items-center justify-center p-4"><div class="w-full max-w-5xl h-[85vh] bg-slate-900 border border-slate-600 rounded-2xl shadow-2xl flex flex-col"><div class="p-4 border-b border-slate-700 flex items-center justify-between"><h3 class="text-2xl font-black text-white font-fantasy">연대기 로그</h3><button id="btn-close-history-log" class="text-slate-300 hover:text-white text-xl">&times;</button></div><div id="history-log-modal-content" class="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll"></div></div></div></div>`;
             renderHistoryUI();
+        }
+
+        function renderHistoryLogModalContent() {
+            const content = document.getElementById('history-log-modal-content');
+            if (!content) return;
+            if (!state.history.logs || state.history.logs.length === 0) {
+                content.innerHTML = `<div class="text-slate-500 text-sm text-center py-10 border border-dashed border-slate-700 rounded">기록된 로그가 없습니다.</div>`;
+                return;
+            }
+            content.innerHTML = state.history.logs.map(log => `<div class="bg-slate-800/70 p-3 rounded border-l-4 border-blue-500 text-sm text-slate-200">${log}</div>`).join('');
+        }
+
+        function openHistoryLogModal() {
+            const modal = document.getElementById('history-log-modal');
+            if (!modal) return;
+            renderHistoryLogModalContent();
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeHistoryLogModal() {
+            const modal = document.getElementById('history-log-modal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
         }
 
         function renderHistoryWorldEventOverlay() {
@@ -1258,33 +1283,53 @@ function renderDungeonExplore() {
             if (!state.history.isPausedForEvent || choices.length === 0 || state.history.isFinished) {
                 overlay.classList.add('hidden');
                 overlay.classList.remove('flex');
+                overlay.dataset.resolving = 'false';
                 overlay.innerHTML = '';
                 return;
             }
-            const cardsHtml = choices.map(choice => {
-                return `<button class="card-fan-card border-slate-600 is-flipped max-w-[240px] w-full" data-history-world-event="${choice.id}"><div class="card-fan-card-spin"><div class="card-fan-card-inner"><div class="card-fan-card-face card-fan-front"><div class="card-fan-icon">${choice.icon}</div><div class="card-fan-title">${choice.title}</div><div class="card-fan-desc">${choice.desc}</div></div><div class="card-fan-card-face card-fan-back"><div class="card-fan-back-sigil">✦</div>FATE</div></div></div></button>`;
+            const colorClassMap = {
+                rose: 'border-rose-500',
+                amber: 'border-amber-500',
+                emerald: 'border-emerald-500',
+                indigo: 'border-indigo-500',
+                violet: 'border-violet-500'
+            };
+            const cardsHtml = choices.map((choice, index) => {
+                const borderClass = colorClassMap[choice.color] || 'border-slate-600';
+                return `<button class="card-fan-card ${borderClass}" data-history-event-index="${index}"><div class="card-fan-card-spin"><div class="card-fan-card-inner"><div class="card-fan-card-face card-fan-front"><div class="card-fan-icon">${choice.icon}</div><div class="card-fan-title">${choice.title}</div><div class="card-fan-desc">${choice.desc}</div></div><div class="card-fan-card-face card-fan-back"><div class="card-fan-back-sigil">✦</div>FATE</div></div></div></button>`;
             }).join('');
-            overlay.innerHTML = `<div class="w-full max-w-5xl"><div class="text-center mb-8"><h3 class="text-3xl font-black text-white tracking-wider font-fantasy">월드 이벤트 선택</h3><p class="text-slate-300 mt-2">100년의 갈림길입니다. 다음 시대를 이끌 운명을 고르세요.</p></div><div class="card-fan-wrap center"><div class="card-fan justify-center gap-6 flex-wrap">${cardsHtml}</div></div></div>`;
+            overlay.innerHTML = `<div class="w-full max-w-5xl"><div class="text-center mb-8"><h3 class="text-3xl font-black text-white tracking-wider font-fantasy">월드 이벤트 선택</h3><p class="text-slate-300 mt-2">100년의 갈림길입니다. 다음 시대를 이끌 운명을 고르세요.</p></div><div class="card-fan-wrap center"><div id="history-world-event-fan" class="card-fan">${cardsHtml}</div></div></div>`;
             overlay.classList.remove('hidden');
             overlay.classList.add('flex');
+            initCardFan('history-world-event-fan', {
+                spread: 170,
+                arcDrop: 24,
+                arcRotate: 8,
+                onCardClick: (card) => {
+                    if (overlay.dataset.resolving === 'true') return;
+                    const idx = Number(card.dataset.historyEventIndex);
+                    const choice = choices[idx];
+                    if (!choice) return;
+                    overlay.dataset.resolving = 'true';
+                    chooseHistoryWorldEvent(choice.id);
+                }
+            });
+            runCardFanShuffle('history-world-event-fan', {
+                withFlip: true,
+                flipStagger: 100,
+                gatherDuration: 420,
+                rotateDuration: 420
+            });
         }
 
         function renderHistoryUI() {
             const progEl = document.getElementById('ui-history-progress');
             if (progEl) progEl.innerText = `진행 중: ${state.history.currentTurn}년`;
-            const logsContainer = document.getElementById('history-logs-container');
-            if (logsContainer && state.history.logs.length > 0) {
-                const latestLog = state.history.logs[0];
-                const logEl = document.createElement('div');
-                logEl.className = 'log-entry bg-slate-800/50 p-3 rounded border-l-4 border-blue-500 text-sm text-slate-300 shadow-sm';
-                logEl.innerHTML = latestLog;
-                if (logsContainer.firstElementChild && logsContainer.firstElementChild.classList.contains('border-dashed')) logsContainer.innerHTML = '';
-                logsContainer.prepend(logEl);
-            }
             state.mapLayers.borders = true;
             state.mapLayers.influence = true;
             drawCanvasMap(true);
             renderHistoryWorldEventOverlay();
+            renderHistoryLogModalContent();
         }
 
         function renderOriginLayout() {
@@ -3479,9 +3524,12 @@ function renderDungeonExplore() {
             }
 
             if (state.screen === 'history') {
-                const worldEventCard = target.closest('[data-history-world-event]');
-                if (worldEventCard) {
-                    chooseHistoryWorldEvent(worldEventCard.dataset.historyWorldEvent);
+                if (target.closest('#btn-history-log')) {
+                    openHistoryLogModal();
+                    return;
+                }
+                if (target.closest('#btn-close-history-log')) {
+                    closeHistoryLogModal();
                     return;
                 }
                 if (target.closest('#btn-history-end')) {
