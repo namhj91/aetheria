@@ -2543,9 +2543,151 @@
             state.counters.settlement = 1;
             state.counters.building = 1;
             state.history.nationNamePool = (NATION_TEMPLATES || []).map(t => ({ ...t }));
+            state.history.isRunning = true;
+            state.history.isFinished = false;
+            state.history.isPausedForEvent = false;
+            state.history.nextWorldEventTurn = 100;
+            state.history.pendingWorldEventChoices = [];
+        }
+
+        function generateHistoryWorldEventChoices() {
+            const pool = [{
+                    id: 'golden_age',
+                    title: '황금기 선포',
+                    icon: '🌞',
+                    desc: '모든 정착지 인구가 크게 성장하고 문화가 꽃핍니다.',
+                    color: 'amber'
+                },
+                {
+                    id: 'frontier_rush',
+                    title: '개척 대행진',
+                    icon: '🧭',
+                    desc: '새로운 정착지가 빠르게 늘어나고 변방이 확장됩니다.',
+                    color: 'emerald'
+                },
+                {
+                    id: 'iron_march',
+                    title: '강철 행군',
+                    icon: '⚔️',
+                    desc: '국가 간 경쟁이 격화되어 군사적 긴장이 높아집니다.',
+                    color: 'rose'
+                },
+                {
+                    id: 'sage_conclave',
+                    title: '현자의 회합',
+                    icon: '📚',
+                    desc: '지도자와 인재가 늘어나 국가 운영이 안정됩니다.',
+                    color: 'indigo'
+                },
+                {
+                    id: 'mana_bloom',
+                    title: '마나 개화',
+                    icon: '✨',
+                    desc: '자연과 신비가 활성화되어 숲과 비옥한 땅이 늘어납니다.',
+                    color: 'violet'
+                }
+            ];
+            const shuffled = [...pool].sort(() => Math.random() - 0.5);
+            return shuffled.slice(0, 3);
+        }
+
+        function applyHistoryWorldEventChoice(choiceId) {
+            if (!choiceId) return;
+            const currentYear = state.gameDate.year + state.history.currentTurn;
+            if (choiceId === 'golden_age') {
+                state.settlements.forEach(s => {
+                    const bonus = Math.floor(s.population * (0.12 + Math.random() * 0.13));
+                    s.population += Math.max(8, bonus);
+                    checkSettlementUpgrades(s);
+                });
+                state.history.logs.unshift(`[${currentYear}년] 🌞 [월드 이벤트] 황금기가 도래하여 정착지 인구가 폭발적으로 증가했습니다.`);
+            } else if (choiceId === 'frontier_rush') {
+                let spawned = 0;
+                for (let i = 0; i < 4; i++) {
+                    let validTiles = [];
+                    state.worldMap.forEach(row => row.forEach(t => {
+                        if ((t.type === 'grass' || t.type === 'forest') && !t.settlementId && !t.influencedBy) validTiles.push(t);
+                    }));
+                    if (validTiles.length <= 0) break;
+                    let t = validTiles[Math.floor(Math.random() * validTiles.length)];
+                    const settlement = createSettlement(generateSettlementName(), t.x, t.y, null, Math.floor(Math.random() * 220) + 60);
+                    if (settlement) spawned++;
+                }
+                state.history.logs.unshift(`[${currentYear}년] 🧭 [월드 이벤트] 개척 대행진으로 ${spawned}개의 신규 정착지가 건설되었습니다.`);
+            } else if (choiceId === 'iron_march') {
+                state.history.nations.forEach(n => {
+                    if (Math.random() < 0.6) n.color = generateNationColor();
+                });
+                state.settlements.forEach(s => {
+                    if (s.nationId && Math.random() < 0.45) {
+                        s.population = Math.max(30, Math.floor(s.population * (0.9 + Math.random() * 0.06)));
+                    }
+                });
+                state.history.logs.unshift(`[${currentYear}년] ⚔️ [월드 이벤트] 강철 행군으로 군사 경쟁이 격화되고 국경 분쟁이 빈발했습니다.`);
+            } else if (choiceId === 'sage_conclave') {
+                state.settlements.forEach(s => {
+                    if ((s.type === 'town' || s.type === 'city' || s.type === 'metropolis') && !s.leaderId) {
+                        const newLeader = createRandomNPC();
+                        newLeader.location = {
+                            x: s.tiles[0].x,
+                            y: s.tiles[0].y
+                        };
+                        s.leaderId = newLeader.id;
+                    }
+                    s.population += Math.floor(Math.random() * 25);
+                });
+                state.history.logs.unshift(`[${currentYear}년] 📚 [월드 이벤트] 현자의 회합으로 각지에 유능한 지도자들이 등장했습니다.`);
+            } else if (choiceId === 'mana_bloom') {
+                for (let y = 0; y < MAP_SIZE; y++) {
+                    for (let x = 0; x < MAP_SIZE; x++) {
+                        const tile = state.worldMap[y][x];
+                        if ((tile.type === 'grass' || tile.type === 'forest') && Math.random() < 0.02) {
+                            tile.type = Math.random() < 0.5 ? 'magic_grass' : 'forest';
+                        }
+                    }
+                }
+                state.history.logs.unshift(`[${currentYear}년] ✨ [월드 이벤트] 마나 개화로 대륙 곳곳의 대지가 신비로운 기운을 머금었습니다.`);
+            }
+        }
+
+        function finalizeHistorySimulation() {
+            if (state.history.isFinished) return;
+            if (state.history.intervalId) clearTimeout(state.history.intervalId);
+            state.history.intervalId = null;
+            state.history.isRunning = false;
+            state.history.isPausedForEvent = false;
+            state.history.pendingWorldEventChoices = [];
+            state.history.isFinished = true;
+
+            state.history.logs.unshift("[시스템] 대륙에 고대 도로망이 형성되었습니다...");
+            generateRoadNetworks();
+            state.gameDate.year += state.history.currentTurn;
+            state.gameDate.month = 3;
+            state.gameDate.week = 1;
+            for (let i = 0; i < 400; i++) {
+                let npc = createRandomNPC();
+                if (state.settlements.length > 0) {
+                    let s = state.settlements[Math.floor(Math.random() * state.settlements.length)];
+                    npc.location = {
+                        x: s.tiles[0].x,
+                        y: s.tiles[0].y
+                    };
+                }
+            }
+            state.npcs.forEach(npc => {
+                if (!npc.location && state.settlements.length > 0) {
+                    let s = state.settlements[Math.floor(Math.random() * state.settlements.length)];
+                    npc.location = {
+                        x: s.tiles[0].x,
+                        y: s.tiles[0].y
+                    };
+                }
+            });
+            renderHistoryUI();
         }
 
         function stepHistorySimulation() {
+            if (!state.history.isRunning || state.history.isFinished || state.history.isPausedForEvent) return;
             const chunk = 10;
             const currentYear = state.gameDate.year + state.history.currentTurn;
             const disaster = processHistorySettlements(chunk);
@@ -2583,47 +2725,29 @@
             state.history.currentTurn += chunk;
             renderHistoryUI();
 
-            if (state.history.currentTurn < state.history.maxTurn) {
-                state.history.intervalId = setTimeout(stepHistorySimulation, 100);
-            } else {
-                state.history.logs.unshift("[시스템] 대륙에 고대 도로망이 형성되었습니다...");
+            if (state.history.currentTurn >= state.history.nextWorldEventTurn) {
+                state.history.isPausedForEvent = true;
+                state.history.nextWorldEventTurn += 100;
+                state.history.pendingWorldEventChoices = generateHistoryWorldEventChoices();
+                state.history.logs.unshift(`[${state.gameDate.year + state.history.currentTurn}년] [시스템] 시대의 갈림길이 도래했습니다. 월드 이벤트를 선택하세요.`);
                 renderHistoryUI();
-                generateRoadNetworks();
-                state.gameDate.year += 1000;
-                state.gameDate.month = 3;
-                state.gameDate.week = 1;
-                for (let i = 0; i < 400; i++) {
-                    let npc = createRandomNPC();
-                    if (state.settlements.length > 0) {
-                        let s = state.settlements[Math.floor(Math.random() * state.settlements.length)];
-                        npc.location = {
-                            x: s.tiles[0].x,
-                            y: s.tiles[0].y
-                        };
-                    }
-                }
-                state.npcs.forEach(npc => {
-                    if (!npc.location && state.settlements.length > 0) {
-                        let s = state.settlements[Math.floor(Math.random() * state.settlements.length)];
-                        npc.location = {
-                            x: s.tiles[0].x,
-                            y: s.tiles[0].y
-                        };
-                    }
-                });
-                document.getElementById('btn-history-skip').classList.add('hidden');
-                const startBtn = document.getElementById('btn-enter-origin');
-                startBtn.classList.remove('hidden');
-                startBtn.classList.add('animate-fade-in');
+                return;
+            }
+
+            if (state.history.isRunning && !state.history.isPausedForEvent) {
+                state.history.intervalId = setTimeout(stepHistorySimulation, 100);
             }
         }
 
-        function stepHistorySimulation_Silent() {
-            const chunk = 10;
-            const disaster = processHistorySettlements(chunk);
-            updateSettlementInfluences();
-            updateNationBordersFromInfluence();
-            state.history.currentTurn += chunk;
+        function chooseHistoryWorldEvent(choiceId) {
+            if (!state.history.isPausedForEvent || state.history.isFinished) return;
+            applyHistoryWorldEventChoice(choiceId);
+            state.history.pendingWorldEventChoices = [];
+            state.history.isPausedForEvent = false;
+            renderHistoryUI();
+            if (state.history.isRunning) {
+                state.history.intervalId = setTimeout(stepHistorySimulation, 120);
+            }
         }
 
         // ==========================================
@@ -3456,7 +3580,6 @@
             modal.classList.remove('-translate-x-full', 'opacity-0', 'pointer-events-none');
             modal.classList.add('translate-x-0', 'opacity-100', 'pointer-events-auto');
         }
-
 
 
 
