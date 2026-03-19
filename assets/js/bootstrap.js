@@ -1,4 +1,30 @@
+        function requestFullscreenBestEffort() {
+            if (document.fullscreenElement) return Promise.resolve();
+            const el = document.documentElement;
+            const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+            if (!req) return Promise.resolve();
+            return req.call(el);
+        }
+
+        function initMobileAutoFullscreen() {
+            if (!window.matchMedia('(pointer: coarse)').matches) return;
+
+            const onFirstGesture = () => {
+                requestFullscreenBestEffort().catch(() => {});
+                window.removeEventListener('pointerdown', onFirstGesture);
+                window.removeEventListener('touchstart', onFirstGesture);
+            };
+
+            window.addEventListener('pointerdown', onFirstGesture, {
+                once: true
+            });
+            window.addEventListener('touchstart', onFirstGesture, {
+                once: true
+            });
+        }
+
         // 초기화 실행
+        initMobileAutoFullscreen();
         setTimeout(initFloatingDebug, 1000); // UI가 완전히 렌더링된 후 툴박스 부착
         
         window.setPlayerAction = function(actionType) {

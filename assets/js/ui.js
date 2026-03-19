@@ -765,6 +765,36 @@ function renderDungeonExplore() {
             modal.classList.add('flex');
         }
 
+        let latestVersionLabelCache = null;
+        async function updateTitleVersionLabel() {
+            const versionEl = document.getElementById('btn-title-version');
+            if (!versionEl) return;
+
+            if (latestVersionLabelCache) {
+                versionEl.textContent = latestVersionLabelCache;
+                return;
+            }
+
+            versionEl.textContent = 'Ver Loading...';
+            const res = await fetch('CHANGELOG.md', {
+                cache: 'no-store'
+            });
+            if (!res.ok) {
+                versionEl.textContent = 'Ver 정보 확인 실패';
+                return;
+            }
+
+            const changelog = await res.text();
+            const match = changelog.match(/^##\s+(Ver[^\n]+)/m);
+            if (!match) {
+                versionEl.textContent = 'Ver 정보 없음';
+                return;
+            }
+
+            latestVersionLabelCache = match[1].trim();
+            versionEl.textContent = latestVersionLabelCache;
+        }
+
         // ==========================================
         // 9. 뷰 렌더링 함수들
         // ==========================================
@@ -836,7 +866,7 @@ function renderDungeonExplore() {
                         </button>
                     </div>
                 </div></div>
-                <div id="btn-title-version" class="absolute bottom-6 right-6 z-30 pointer-events-auto text-slate-600 text-xs md:text-sm font-fantasy cursor-pointer hover:text-slate-300 transition-colors">Ver 5.3 Mobile UI & Changelog</div>
+                <div id="btn-title-version" class="absolute bottom-6 right-6 z-30 pointer-events-auto text-slate-600 text-xs md:text-sm font-fantasy cursor-pointer hover:text-slate-300 transition-colors">Ver Loading...</div>
 
                 <!-- 불러오기 모달 -->
                 <div id="load-modal" class="fixed inset-0 bg-black/90 z-[300] hidden items-center justify-center p-4">
@@ -853,6 +883,10 @@ function renderDungeonExplore() {
             initCardFan('title-menu-fan', {
                 baseZOrder: 'index-desc',
                 onCardClick: (card) => handleTitleMenuClick(card.id)
+            });
+            updateTitleVersionLabel().catch(() => {
+                const versionEl = document.getElementById('btn-title-version');
+                if (versionEl) versionEl.textContent = 'Ver 정보 확인 실패';
             });
         }
 
