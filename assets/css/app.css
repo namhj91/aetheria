@@ -1,0 +1,790 @@
+
+        body {
+            font-family: 'Noto Serif KR', serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            user-select: none;
+            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 70%);
+            min-height: 100vh;
+        }
+
+        .font-fantasy {
+            font-family: 'Cinzel', serif;
+        }
+
+        .menu-btn {
+            position: relative;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .menu-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: all 0.5s ease;
+        }
+
+        .menu-btn:hover::before {
+            left: 100%;
+        }
+
+        .menu-btn:hover:not(:disabled) {
+            text-shadow: 0 0 10px rgba(125, 211, 252, 0.5);
+            transform: translateX(10px);
+        }
+
+        .menu-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .select-card {
+            transition: all 0.2s;
+            cursor: pointer;
+            border: 1px solid #334155;
+            background: rgba(30, 41, 59, 0.5);
+        }
+
+        .select-card:hover:not(.locked) {
+            border-color: #38bdf8;
+            background: rgba(30, 41, 59, 0.8);
+        }
+
+        .select-card.selected {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.1);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+        }
+
+        .select-card.locked {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(100%);
+        }
+
+        .trait-card {
+            border-width: 1px;
+            border-style: solid;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .gender-btn {
+            transition: all 0.2s;
+            border: 1px solid #475569;
+        }
+
+        .gender-btn.selected {
+            background-color: #2563eb;
+            border-color: #3b82f6;
+            color: white;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+
+        .stat-btn {
+            transition: all 0.1s;
+        }
+
+        .stat-btn:active {
+            transform: scale(0.9);
+            background-color: #475569;
+        }
+
+        .stat-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .stat-bar-fill {
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        :root {
+            --topbar-notch-w: 140px;
+            --topbar-notch-h: 32px;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        .animate-fade-out {
+            animation: fadeIn 0.4s ease-in reverse forwards;
+        }
+
+        @keyframes glow {
+
+            0%,
+            100% {
+                text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+            }
+
+            50% {
+                text-shadow: 0 0 20px rgba(56, 189, 248, 0.8), 0 0 30px rgba(56, 189, 248, 0.6);
+            }
+        }
+
+        .text-glow {
+            animation: glow 3s infinite;
+        }
+
+        @keyframes diceSpin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .rolling .dice-icon {
+            animation: diceSpin 0.5s ease-in-out;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        .text-adult {
+            color: #f43f5e;
+            text-shadow: 0 0 8px rgba(244, 63, 94, 0.6);
+        }
+
+        .map-container {
+            cursor: grab;
+        }
+
+        .map-container:active {
+            cursor: grabbing;
+        }
+
+        /* 상단 정보 드로어 & 대기열 드로어 모션 */
+        #topbar-drawer {
+            pointer-events: none;
+        }
+
+        #topbar-drawer > * {
+            pointer-events: auto;
+        }
+
+        #topbar-panel {
+            transform-origin: top center;
+            transition: max-height 360ms cubic-bezier(0.16, 0.84, 0.44, 1), opacity 180ms ease, transform 280ms cubic-bezier(0.16, 0.84, 0.44, 1), filter 280ms ease;
+            will-change: max-height, opacity, transform, filter;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 56px 0 16px 12px;
+            width: 100%;
+            pointer-events: none;
+        }
+
+        #action-queue-panel {
+            transform-origin: top left;
+            transition: max-height 320ms cubic-bezier(0.16, 0.84, 0.44, 1), opacity 180ms ease, transform 260ms cubic-bezier(0.16, 0.84, 0.44, 1);
+            will-change: max-height, opacity, transform;
+        }
+
+        #action-queue-drawer:hover #action-queue-header {
+            box-shadow: 0 0 18px rgba(59, 130, 246, 0.35);
+            border-color: rgba(59, 130, 246, 0.55);
+        }
+
+        #minimap-panel {
+            width: 190px;
+        }
+
+        #layer-controls {
+            width: 190px;
+            min-width: 190px;
+            max-width: 190px;
+            box-sizing: border-box;
+        }
+
+        #minimap-body {
+            width: 160px;
+            height: 160px;
+            box-sizing: border-box;
+        }
+
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        .topbar-menu-btn {
+            position: absolute;
+            top: 10px;
+            left: 12px;
+            height: 36px;
+            padding: 0 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.95));
+            border: 1px solid rgba(148, 163, 184, 0.55);
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            z-index: 60;
+        }
+
+        .topbar-menu-btn.is-open {
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(14, 165, 233, 0.95));
+            border-color: rgba(147, 197, 253, 0.7);
+            box-shadow: 0 14px 28px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            color: #fff;
+        }
+
+        .topbar-panel-inner {
+            position: relative;
+            width: min(980px, 92vw);
+            border-radius: 18px;
+            padding: 14px 16px;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(2, 6, 23, 0.98) 100%);
+            border: 1px solid rgba(71, 85, 105, 0.7);
+            box-shadow: 0 20px 40px rgba(2, 6, 23, 0.6);
+            backdrop-filter: blur(16px);
+            pointer-events: auto;
+        }
+
+        .topbar-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .topbar-card {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(71, 85, 105, 0.6);
+            border-radius: 14px;
+            padding: 12px 14px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .topbar-card-title {
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            color: rgba(148, 163, 184, 0.75);
+            text-transform: uppercase;
+        }
+
+
+        .log-entry {
+            animation: slideInLeft 0.5s ease-out forwards;
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+
+        @keyframes slideInLeft {
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .nav-btn.active {
+            background-color: #1e40af;
+            border-color: #3b82f6;
+            color: white;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .facility-card:hover {
+            transform: translateY(-2px);
+            border-color: #fbbf24;
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.15);
+        }
+
+        @keyframes pulseBorder {
+            0% {
+                border-color: #475569;
+            }
+
+            50% {
+                border-color: #3b82f6;
+            }
+
+            100% {
+                border-color: #475569;
+            }
+        }
+
+        .queue-item-active {
+            animation: pulseBorder 1.5s infinite;
+            background-color: rgba(30, 64, 175, 0.5);
+        }
+
+        .save-slot {
+            transition: all 0.2s;
+        }
+
+        .save-slot:hover {
+            border-color: #38bdf8;
+            background-color: rgba(30, 64, 175, 0.3);
+            transform: translateX(5px);
+        }
+
+        /* ================================================== */
+        /* 카드 팬 UI (손에 쥔 듯한 아치형 배치) */
+        /* 여러 화면에서 재사용 가능 */
+        /* ================================================== */
+        :root {
+            --card-fan-w: 190px;
+            --card-fan-h: calc(var(--card-fan-w) * 1.618);
+        }
+
+        .card-fan-wrap {
+            width: 100%;
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .card-fan-wrap.center {
+            justify-content: center;
+        }
+
+        .card-fan {
+            position: relative;
+            height: calc(var(--card-fan-h) + 140px);
+            width: min(860px, 92vw);
+            perspective: 1600px;
+        }
+
+        .card-fan-card {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: var(--card-fan-w);
+            height: var(--card-fan-h);
+            transform: translate(-50%, -50%);
+            transform-style: preserve-3d;
+            border-radius: 18px;
+            padding: 0;
+            background: transparent;
+            box-shadow: 0 18px 32px rgba(2, 6, 23, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            display: block;
+            cursor: pointer;
+            transition: transform 280ms cubic-bezier(0.18, 0.78, 0.34, 1), box-shadow 260ms ease, border-color 260ms ease;
+            transform: var(--base-transform, translate(-50%, -50%));
+            transform-origin: center center;
+            overflow: visible;
+        }
+
+        .card-fan-card::after {
+            content: none;
+        }
+
+        .card-fan-card-spin {
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+        }
+
+        .card-fan-card-inner {
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .card-fan-card.is-flipped .card-fan-card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-fan-card-face {
+            position: absolute;
+            inset: 0;
+            border-radius: 18px;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            text-align: left;
+            padding: 18px;
+            border: 1px solid rgba(71, 85, 105, 0.7);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .card-fan-card-face::after {
+            content: '';
+            position: absolute;
+            inset: 10px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            pointer-events: none;
+        }
+
+        .card-fan-front {
+            background: linear-gradient(160deg, #0f172a, #020617);
+        }
+
+        .card-fan-back {
+            transform: rotateY(180deg);
+            background: radial-gradient(circle at 20% 20%, #12354d, #020617 60%);
+            color: rgba(226, 232, 240, 0.85);
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .card-fan-back .card-fan-back-sigil {
+            font-size: 30px;
+            margin-bottom: 8px;
+            letter-spacing: 0;
+        }
+
+        .card-fan-card:hover {
+            box-shadow: 0 28px 48px rgba(2, 6, 23, 0.75), 0 0 30px rgba(56, 189, 248, 0.15);
+        }
+
+        .card-fan-card:hover .card-fan-card-face {
+            border-color: rgba(56, 189, 248, 0.7);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+        }
+
+        .card-fan[data-card-fan-locked="true"] .card-fan-card:not(.is-active),
+        .card-fan[data-shuffling="true"] .card-fan-card:not(.is-active) {
+            pointer-events: none;
+        }
+
+        .card-fan[data-card-fan-locked="true"] .card-fan-card:hover,
+        .card-fan[data-shuffling="true"] .card-fan-card:hover {
+            box-shadow: 0 18px 32px rgba(2, 6, 23, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .card-fan[data-card-fan-locked="true"] .card-fan-card:hover .card-fan-card-face,
+        .card-fan[data-shuffling="true"] .card-fan-card:hover .card-fan-card-face {
+            border-color: rgba(71, 85, 105, 0.7);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .card-fan-card.is-active .card-fan-card-face {
+            border-color: rgba(56, 189, 248, 0.9);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .card-fan-card.border-purple-500 .card-fan-card-face {
+            border-color: #a855f7;
+        }
+
+        .card-fan-card.border-slate-600 .card-fan-card-face {
+            border-color: #475569;
+        }
+
+        .card-fan-card.is-special .card-fan-card-face {
+            border-color: #a855f7;
+            box-shadow: 0 0 18px rgba(168, 85, 247, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+        }
+
+        .card-fan-card.is-special .card-fan-card-face::after {
+            border-color: rgba(168, 85, 247, 0.25);
+        }
+
+        .card-fan-card.is-spinning {
+            animation: cardFanSpinY 560ms cubic-bezier(0.2, 0.9, 0.25, 1);
+            box-shadow: none;
+        }
+
+        .card-fan-card.is-spinning:hover {
+            box-shadow: none;
+        }
+
+        .card-fan.is-deck-flip .card-fan-card,
+        .card-fan-card.is-flipped {
+            box-shadow: none;
+        }
+
+        .card-fan.is-gathering .card-fan-card {
+            animation: cardFanGather 520ms cubic-bezier(0.22, 0.8, 0.2, 1) both;
+            animation-delay: var(--shuffle-delay, 0ms);
+        }
+
+        .card-fan.is-spreading .card-fan-card {
+            animation: cardFanSpread 980ms cubic-bezier(0.22, 0.8, 0.2, 1) both;
+            animation-delay: var(--shuffle-delay, 0ms);
+        }
+
+        .card-fan.is-rotating .card-fan-card-spin {
+            animation-name: cardFanRotateOnce;
+            animation-duration: var(--shuffle-turn-ms, 180ms);
+            animation-iteration-count: var(--shuffle-turns, 3);
+            animation-direction: alternate;
+            animation-timing-function: linear;
+            animation-fill-mode: both;
+            animation-delay: var(--shuffle-delay, 0ms);
+        }
+
+        .card-fan.is-deck-flip .card-fan-card-inner {
+            transition-duration: 360ms;
+            transition-delay: 0ms;
+            transition-timing-function: cubic-bezier(0.18, 0.86, 0.32, 1);
+        }
+
+        @keyframes cardFanGather {
+            0% {
+                opacity: 1;
+                transform: var(--base-transform, translate(-50%, -50%));
+            }
+
+            100% {
+                opacity: 1;
+                transform: var(--base-transform, translate(-50%, -50%)) translateX(var(--stack-x, 0px)) translateY(var(--stack-y, 0px)) rotate(var(--stack-rot, 0deg)) scale(var(--stack-scale, 0.92));
+            }
+        }
+
+        @keyframes cardFanSpread {
+            0% {
+                opacity: 1;
+                transform: var(--base-transform, translate(-50%, -50%)) translateX(var(--stack-x, 0px)) translateY(var(--stack-y, 0px)) rotate(var(--stack-rot, 0deg)) scale(var(--stack-scale, 0.92));
+            }
+
+            48% {
+                opacity: 1;
+                transform: var(--base-transform, translate(-50%, -50%)) translateX(var(--stack-x, 0px)) translateY(var(--stack-y, 0px)) rotate(var(--stack-rot, 0deg)) scale(var(--stack-scale, 0.92));
+            }
+
+            78% {
+                opacity: 1;
+                transform: var(--base-transform, translate(-50%, -50%)) translateX(var(--release-x, 0px)) translateY(var(--release-y, 0px)) rotate(calc(var(--stack-rot, 0deg) * 0.2)) scale(1.03);
+            }
+
+            100% {
+                opacity: 1;
+                transform: var(--base-transform, translate(-50%, -50%));
+            }
+        }
+
+        @keyframes cardFanRotateOnce {
+            0% {
+                transform: rotate(0deg) scale(0.98);
+            }
+
+            100% {
+                transform: rotate(calc(var(--shuffle-dir, 1) * 360deg)) scale(1);
+            }
+        }
+
+        @keyframes cardFanSpinY {
+            0% {
+                transform: var(--spin-base, var(--base-transform, translate(-50%, -50%))) rotateY(0deg);
+            }
+
+            100% {
+                transform: var(--spin-base, var(--base-transform, translate(-50%, -50%))) rotateY(360deg);
+            }
+        }
+
+        .card-fan-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            background: rgba(30, 41, 59, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .card-fan-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #e2e8f0;
+        }
+
+        .card-fan-desc {
+            font-size: 12px;
+            color: rgba(148, 163, 184, 0.9);
+            line-height: 1.5;
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --card-fan-w: 160px;
+            }
+
+            .card-fan-wrap {
+                justify-content: center;
+            }
+
+            .card-fan {
+                height: calc(var(--card-fan-h) + 120px);
+            }
+        }
+
+        /* ================================================== */
+        /* [수정] 던전 탐색 카드 3D 뒤집기 애니메이션 & 오라 효과 */
+        /* ================================================== */
+        #dungeon-cards-container {
+            perspective: 2000px;
+        }
+
+        .dungeon-card {
+            width: 16rem;
+            /* w-64 */
+            height: 24rem;
+            /* h-96 */
+            position: relative;
+            transform-style: preserve-3d;
+            /* 💡 이전 궤적 꼬임 해결: 모든 상태에 동일한 transform 기입 */
+            transform: translateY(0px) scale(1) rotateY(0deg);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+        }
+
+        .dungeon-card:hover {
+            transform: translateY(-15px) scale(1.03) rotateY(0deg);
+        }
+
+        .dungeon-card.flipped {
+            transform: translateY(0px) scale(1) rotateY(180deg);
+        }
+
+        .dungeon-card.flipped:hover {
+            transform: translateY(-15px) scale(1.03) rotateY(180deg);
+        }
+
+        /* 💡 지워졌던 카드 앞/뒷면 공통 스타일 (복구됨) */
+        .card-face {
+            /* Tailwind 클래스 충돌을 막기 위해 absolute를 강제합니다 */
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            /* 사파리 브라우저 호환성 */
+            backface-visibility: hidden;
+            border-radius: 0.75rem;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* [뒷면] 오라가 일렁이는 상태 (처음에 보여야 할 면) */
+        .card-back {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            transform: rotateY(0deg);
+            z-index: 2;
+        }
+
+        /* [앞면] 결과가 나오는 상태 (뒤집혔을 때 보여야 할 면) */
+        .card-front {
+            background: #1e293b;
+            transform: rotateY(180deg);
+            z-index: 1;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        /* --- 오라 이펙트 스타일 --- */
+        .card-glow-rose {
+            --glow-color: rgba(225, 29, 72, 0.9);
+        }
+
+        .card-glow-amber {
+            --glow-color: rgba(245, 158, 11, 0.9);
+        }
+
+        .card-glow-emerald {
+            --glow-color: rgba(16, 185, 129, 0.9);
+        }
+
+        .card-glow-purple {
+            --glow-color: rgba(168, 85, 247, 0.9);
+        }
+
+        .card-glow-slate {
+            --glow-color: rgba(100, 116, 139, 0.7);
+        }
+
+        .card-back.intensity-1 {
+            box-shadow: 0 0 20px var(--glow-color);
+        }
+
+        .card-back.intensity-2 {
+            box-shadow: 0 0 35px var(--glow-color);
+            animation: cardPulse 2s infinite alternate;
+        }
+
+        .card-back.intensity-3 {
+            box-shadow: 0 0 60px var(--glow-color), inset 0 0 25px var(--glow-color);
+            animation: cardPulse 1s infinite alternate;
+        }
+
+        @keyframes cardPulse {
+            0% {
+                box-shadow: 0 0 25px var(--glow-color);
+            }
+
+            100% {
+                box-shadow: 0 0 50px var(--glow-color), 0 0 15px rgba(255, 255, 255, 0.6);
+            }
+        }
+    

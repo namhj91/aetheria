@@ -1,0 +1,141 @@
+{
+  "goblin_scout": {
+    "id": "goblin_scout",
+    "name": "고블린 정찰병",
+    "tags": {
+      "stink": 20,
+      "light_weight": 30
+    },
+    "drops": [
+      { "partName": "귀", "baseTag": "meat", "prob": 0.8 },
+      { "partName": "누더기 가죽", "baseTag": "leather", "prob": 0.5 },
+      { "partName": "뼛조각", "baseTag": "bone", "prob": 0.4 }
+    ]
+  },
+  "orc_warrior": {
+    "id": "orc_warrior",
+    "name": "오크 전사",
+    "tags": {
+      "heavy": 50,
+      "bleed": 30,
+      "earth": 10
+    },
+    "drops": [
+      { "partName": "질긴 가죽", "baseTag": "leather", "prob": 0.7 },
+      { "partName": "두개골", "baseTag": "bone", "prob": 0.5 },
+      { "partName": "송곳니", "baseTag": "fang", "prob": 0.4 }
+    ]
+  },
+  "forest_slime": {
+    "id": "forest_slime",
+    "name": "숲 슬라임",
+    "tags": {
+      "regen": 40,
+      "poison": 20,
+      "earth": 10
+    },
+    "drops": [
+      { "partName": "점액질", "baseTag": "essence", "prob": 0.9 },
+      { "partName": "핵(Core)", "baseTag": "essence", "prob": 0.2 }
+    ]
+  },
+  "skeleton_soldier": {
+    "id": "skeleton_soldier",
+    "name": "해골 병사",
+    "tags": {
+      "dark": 30,
+      "paralysis": 20,
+      "sharp": 10
+    },
+    "drops": [
+      { "partName": "갈비뼈", "baseTag": "bone", "prob": 1.0 },
+      { "partName": "녹슨 철검 조각", "baseTag": "ore", "prob": 0.3 }
+    ]
+  },
+  "giant_boar": {
+    "id": "giant_boar",
+    "name": "거대 멧돼지",
+    "tags": {
+      "heavy": 40,
+      "warm": 30,
+      "earth": 20
+    },
+    "drops": [
+      { "partName": "생고기", "baseTag": "meat", "prob": 1.0 },
+      { "partName": "두꺼운 가죽", "baseTag": "leather", "prob": 0.6 },
+      { "partName": "거대 엄니", "baseTag": "fang", "prob": 0.3 }
+    ]
+  },
+  "fire_salamander": {
+    "id": "fire_salamander",
+    "name": "화염 도롱뇽",
+    "tags": {
+      "fire": 70,
+      "regen": 20,
+      "warm": 50
+    },
+    "drops": [
+      { "partName": "비늘", "baseTag": "scale", "prob": 0.7 },
+      { "partName": "기름진 꼬리살", "baseTag": "meat", "prob": 0.5 },
+      { "partName": "정수", "baseTag": "essence", "prob": 0.2 }
+    ]
+  },
+  "harpy_hunter": {
+    "id": "harpy_hunter",
+    "name": "하피 사냥꾼",
+    "tags": {
+      "wind": 50,
+      "light_weight": 60,
+      "bleed": 40
+    },
+    "drops": [
+      { "partName": "깃털 가죽", "baseTag": "leather", "prob": 0.8 },
+      { "partName": "발톱", "baseTag": "fang", "prob": 0.5 },
+      { "partName": "속 빈 뼈", "baseTag": "bone", "prob": 0.6 }
+    ]
+  },
+  "cave_troll": {
+    "id": "cave_troll",
+    "name": "동굴 트롤",
+    "tags": {
+      "regen": 90,
+      "heavy": 80,
+      "stink": 60,
+      "dark": 20
+    },
+    "drops": [
+      { "partName": "질긴 살점", "baseTag": "meat", "prob": 1.0 },
+      { "partName": "재생의 정수", "baseTag": "essence", "prob": 0.3 },
+      { "partName": "단단한 뼈", "baseTag": "bone", "prob": 0.6 }
+    ]
+  },
+  "earth_elemental": {
+    "id": "earth_elemental",
+    "name": "대지의 정령",
+    "tags": {
+      "earth": 100,
+      "heavy": 90,
+      "mana": 40
+    },
+    "drops": [
+      { "partName": "단단한 암석", "baseTag": "ore", "prob": 1.0 },
+      { "partName": "순도 높은 광석", "baseTag": "ore", "prob": 0.4 },
+      { "partName": "대지의 정수", "baseTag": "essence", "prob": 0.15 }
+    ]
+  },
+  "frost_drake": {
+    "id": "frost_drake",
+    "name": "서리 비룡",
+    "tags": {
+      "ice": 100,
+      "mana": 60,
+      "light_weight": 20,
+      "paralysis": 30
+    },
+    "drops": [
+      { "partName": "서늘한 비늘", "baseTag": "scale", "prob": 0.8 },
+      { "partName": "비룡의 송곳니", "baseTag": "fang", "prob": 0.5 },
+      { "partName": "얼어붙은 정수", "baseTag": "essence", "prob": 0.1 }
+    ]
+  }
+}
