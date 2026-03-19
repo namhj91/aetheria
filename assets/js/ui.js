@@ -932,7 +932,11 @@ function renderDungeonExplore() {
                 if (!cards.length) return;
                 const mid = (cards.length - 1) / 2;
                 const cardWidth = cards[0].offsetWidth || 220;
-                const spread = state.options.spread ?? Math.round(cardWidth * 0.65);
+                const requestedSpread = state.options.spread ?? Math.round(cardWidth * 0.65);
+                const spreadPadding = state.options.spreadPadding ?? 24;
+                const availableWidth = Math.max(cardWidth, (container.clientWidth || 0) - (spreadPadding * 2));
+                const maxSpread = mid > 0 ? Math.max(0, (availableWidth - cardWidth) / 2) : 0;
+                const spread = mid > 0 ? Math.min(requestedSpread, maxSpread) : 0;
                 const arcDrop = state.options.arcDrop ?? 28;
                 const arcRotate = state.options.arcRotate ?? 10;
                 const focusLift = state.options.focusLift ?? 26;
