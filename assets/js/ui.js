@@ -692,6 +692,9 @@ function renderDungeonExplore() {
                 </div>
             `;
             let canReadMind = state.player.traits.includes('mind_reader');
+            const debugModal = document.getElementById('debug-modal');
+            const floatingTool = document.getElementById('floating-debug-tool');
+            const isDebugVisible = (debugModal && !debugModal.classList.contains('hidden')) || (floatingTool && !floatingTool.classList.contains('hidden'));
 
             let hiddenStatsStr = `
                 <div class="text-xs bg-slate-800 p-3 rounded border border-slate-700 space-y-1.5 mt-3">
@@ -704,6 +707,21 @@ function renderDungeonExplore() {
                     </div>
                 </div>
             `;
+            let compatibilityDebugHtml = '';
+            if (isDebugVisible) {
+                const partner = npc.spouseId ? state.npcs.find(n => n.id === npc.spouseId) || (state.player.id === npc.spouseId ? state.player : null) : null;
+                const playerCompatibility = getSexCompatibility(state.player, npc);
+                compatibilityDebugHtml = `
+                    <div class="text-xs bg-slate-900/70 p-3 rounded border border-rose-900/50 space-y-1.5 mt-3">
+                        <div class="font-bold text-rose-300 border-b border-slate-700 pb-1 mb-2">[디버그] 속궁합/임신 지표</div>
+                        <div>고유 시드: <span class="text-white font-mono">${npc.seedCode || '미설정'}</span></div>
+                        <div>플레이어와 속궁합: <span class="text-rose-300 font-bold">${playerCompatibility}</span></div>
+                        <div>배우자: <span class="text-white">${partner ? partner.name : '없음'}</span></div>
+                        <div>배우자와 속궁합: <span class="text-rose-300 font-bold">${partner ? getSexCompatibility(npc, partner) : '-'}</span></div>
+                        <div>임신 상태: <span class="text-white">${npc.pregnancy ? '임신 중' : '해당 없음'}</span></div>
+                    </div>
+                `;
+            }
 
             let ambitionHtml = '';
             if (canReadMind) {
@@ -766,6 +784,7 @@ function renderDungeonExplore() {
                 ${statsHtml}
                 ${ambitionHtml}
                 ${hiddenStatsStr}
+                ${compatibilityDebugHtml}
             `;
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -1539,6 +1558,7 @@ function renderDungeonExplore() {
                 height: '',
                 weight: '',
                 race: 'human',
+                seedCode: generateEntitySeedCode(),
                 health: 100,
                 isDead: false,
                 originType: chosenOrigin.type,
@@ -1640,6 +1660,9 @@ function renderDungeonExplore() {
                 },
                 mercenaries: [],
                 relationships: {},
+                spouseId: null,
+                pregnancy: null,
+                lastSexTurn: null,
                 fiefdoms: [],
                 creations: [],
                 rp: 0,

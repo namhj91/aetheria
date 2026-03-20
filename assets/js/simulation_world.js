@@ -967,6 +967,71 @@
                     }
                 }
             }
+
+            const isAdult = (ent) => ent && !ent.isDead && (ent.age >= getAdultAge(ent.race));
+            const isFertileFemale = (ent) => {
+                if (!ent || ent.gender !== 'F' || ent.isDead || ent.pregnancy) return false;
+                const adultAge = getAdultAge(ent.race);
+                const fertileEnd = Math.max(adultAge + 1, getOldAgeStart(ent.race) - 5);
+                return ent.age >= adultAge && ent.age <= fertileEnd;
+            };
+            const linkMarriage = (a, b) => {
+                a.spouseId = b.id;
+                b.spouseId = a.id;
+            };
+            const processSexAndPregnancy = (a, b) => {
+                const compatibility = getSexCompatibility(a, b);
+                const favor = ((a.relationships && a.relationships[b.id]) || 0);
+                const spouseBonus = (a.spouseId === b.id && b.spouseId === a.id) ? 0.2 : 0;
+                const sexChance = Math.min(0.95, Math.max(0.03, 0.12 + (favor / 220) + ((a.hiddenStats?.lust || 0) / 450) + spouseBonus));
+                if (Math.random() >= sexChance) return;
+
+                a.lastSexTurn = state.history.currentTurn;
+                b.lastSexTurn = state.history.currentTurn;
+                const satisfactionDelta = Math.max(-2, Math.floor((compatibility - 50) / 12));
+                addFavorability(a, b, satisfactionDelta);
+
+                const male = a.gender === 'M' ? a : (b.gender === 'M' ? b : null);
+                const female = a.gender === 'F' ? a : (b.gender === 'F' ? b : null);
+                if (!male || !female) return;
+                if (male.race !== female.race) return; // 이종족 간 임신 불가
+                if (!isFertileFemale(female)) return;
+
+                const pregnancyChance = Math.min(0.12, (0.01 + (compatibility / 5000)));
+                if (Math.random() < pregnancyChance) {
+                    female.pregnancy = {
+                        fatherId: male.id,
+                        startedTurn: state.history.currentTurn
+                    };
+                }
+            };
+
+            for (let key in locationGroups) {
+                const group = locationGroups[key].filter(isAdult);
+                if (group.length < 2) continue;
+                for (let i = 0; i < group.length; i++) {
+                    const a = group[i];
+                    const candidates = group.filter(b => b.id !== a.id);
+                    if (candidates.length === 0) continue;
+
+                    candidates.sort((left, right) => {
+                        const favorL = (a.relationships && a.relationships[left.id]) || 0;
+                        const favorR = (a.relationships && a.relationships[right.id]) || 0;
+                        const raceBonusL = left.race === a.race ? 22 : 0;
+                        const raceBonusR = right.race === a.race ? 22 : 0;
+                        return (favorR + raceBonusR + Math.random() * 12) - (favorL + raceBonusL + Math.random() * 12);
+                    });
+                    const b = candidates[0];
+                    if (!b) continue;
+
+                    const favor = (a.relationships && a.relationships[b.id]) || 0;
+                    if (!a.spouseId && !b.spouseId && favor >= 70) {
+                        const spouseChance = (a.race === b.race) ? 0.18 : 0.04;
+                        if (Math.random() < spouseChance) linkMarriage(a, b);
+                    }
+                    processSexAndPregnancy(a, b);
+                }
+            }
         }
 
         // 💡 게임 달력에 맞춰 마나가 폭발하고 가라앉는 '맥동' 시스템 적용
@@ -1256,6 +1321,39 @@
             return parts.first + parts.last;
         }
 
+        function collectUsedFullNames() {
+            const used = new Set();
+            if (state.player && state.player.firstName && state.player.lastName) used.add(`${state.player.firstName}|${state.player.lastName}`);
+            state.npcs.forEach(npc => {
+                if (!npc || !npc.firstName || !npc.lastName) return;
+                used.add(`${npc.firstName}|${npc.lastName}`);
+            });
+            return used;
+        }
+
+        function generateUniqueNameParts(race, gender) {
+            const usedNames = collectUsedFullNames();
+            let parts = null;
+            let guard = 0;
+            do {
+                parts = generateNameParts(race, gender);
+                guard++;
+            } while (usedNames.has(`${parts.first}|${parts.last}`) && guard < 500);
+            return parts;
+        }
+
+        function generateEntitySeedCode() {
+            return String(Math.floor(Math.random() * 10000000000)).padStart(10, '0');
+        }
+
+        function getSexCompatibility(a, b) {
+            const aSeed = String(a?.seedCode || '0000000000');
+            const bSeed = String(b?.seedCode || '0000000000');
+            const aHead = parseInt(aSeed.slice(0, 2), 10) || 0;
+            const bHead = parseInt(bSeed.slice(0, 2), 10) || 0;
+            return Math.max(1, 100 - Math.abs(aHead - bHead));
+        }
+
         function generateSettlementName() {
             const prefixes = SETTLEMENT_NAME_DATA.prefixes;
             const suffixes = SETTLEMENT_NAME_DATA.suffixes;
@@ -1395,12 +1493,13 @@
                 ambitionTarget = state.npcs[Math.floor(Math.random() * state.npcs.length)].id;
             }
 
-            const nameParts = generateNameParts(race, gender);
+            const nameParts = generateUniqueNameParts(race, gender);
             const npc = {
                 id: 'npc_' + state.counters.npc++,
                 name: nameParts.first + nameParts.last,
                 firstName: nameParts.first, // 💡 이름 분리 저장
                 lastName: nameParts.last, // 💡 성씨(가문) 분리 저장
+                seedCode: generateEntitySeedCode(),
                 gender,
                 race,
                 age: pStats.age,
@@ -1424,6 +1523,9 @@
                 actionQueue: [],
                 apPool: 0,
                 relationships: {},
+                spouseId: null,
+                pregnancy: null,
+                lastSexTurn: null,
                 ambition: {
                     type: ambitionType,
                     targetId: ambitionTarget
@@ -2081,9 +2183,17 @@
         // 6. 거점 및 도시 빌딩
         // ==========================================
         function createNation(name, desc, color, options = {}) {
+            const usedNames = new Set((state.history.nations || []).map(n => n.name));
+            let finalName = name || `신흥 왕국 ${state.counters.nation}`;
+            if (usedNames.has(finalName)) {
+                const base = finalName;
+                let idx = 2;
+                while (usedNames.has(`${base} ${idx}`)) idx++;
+                finalName = `${base} ${idx}`;
+            }
             const nation = {
                 id: state.counters.nation++,
-                name,
+                name: finalName,
                 desc,
                 color,
                 rulerId: options.rulerId || null,
@@ -3862,4 +3972,3 @@
             modal.classList.remove('-translate-x-full', 'opacity-0', 'pointer-events-none');
             modal.classList.add('translate-x-0', 'opacity-100', 'pointer-events-auto');
         }
-
