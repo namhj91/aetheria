@@ -791,12 +791,24 @@ function renderDungeonExplore() {
         }
 
         let latestVersionLabelCache = null;
+
+        function syncTitleVersionDebugHint() {
+            const versionEl = document.getElementById('btn-title-version');
+            if (!versionEl) return;
+            versionEl.classList.toggle('text-yellow-300', ENABLE_DEBUG_TOOL);
+            versionEl.classList.toggle('drop-shadow-[0_0_8px_rgba(250,204,21,0.95)]', ENABLE_DEBUG_TOOL);
+            versionEl.classList.toggle('hover:text-yellow-200', ENABLE_DEBUG_TOOL);
+            versionEl.classList.toggle('text-slate-600', !ENABLE_DEBUG_TOOL);
+            versionEl.classList.toggle('hover:text-slate-300', !ENABLE_DEBUG_TOOL);
+        }
+
         async function updateTitleVersionLabel() {
             const versionEl = document.getElementById('btn-title-version');
             if (!versionEl) return;
 
             if (latestVersionLabelCache) {
                 versionEl.textContent = latestVersionLabelCache;
+                syncTitleVersionDebugHint();
                 return;
             }
 
@@ -806,6 +818,7 @@ function renderDungeonExplore() {
             });
             if (!res.ok) {
                 versionEl.textContent = 'Ver 정보 확인 실패';
+                syncTitleVersionDebugHint();
                 return;
             }
 
@@ -813,11 +826,13 @@ function renderDungeonExplore() {
             const match = changelog.match(/^##\s+(Ver[^\n]+)/m);
             if (!match) {
                 versionEl.textContent = 'Ver 정보 없음';
+                syncTitleVersionDebugHint();
                 return;
             }
 
             latestVersionLabelCache = match[1].trim();
             versionEl.textContent = latestVersionLabelCache;
+            syncTitleVersionDebugHint();
         }
 
         // ==========================================
@@ -912,7 +927,9 @@ function renderDungeonExplore() {
             updateTitleVersionLabel().catch(() => {
                 const versionEl = document.getElementById('btn-title-version');
                 if (versionEl) versionEl.textContent = 'Ver 정보 확인 실패';
+                syncTitleVersionDebugHint();
             });
+            syncTitleVersionDebugHint();
         }
 
         function handleTitleMenuClick(btnId) {
@@ -2434,7 +2451,7 @@ function renderDungeonExplore() {
                 `</div>`,
                 `<div class="flex items-center gap-2 flex-wrap">`,
                 pointsUI,
-                `<button id="btn-open-debug" class="w-8 h-8 bg-slate-700/80 hover:bg-slate-600 text-white rounded-full text-sm font-bold shadow-md transition-colors" title="디버그/로그">👁️</button>`,
+                ENABLE_DEBUG_TOOL ? `<button id="btn-open-debug" class="w-8 h-8 bg-slate-700/80 hover:bg-slate-600 text-white rounded-full text-sm font-bold shadow-md transition-colors" title="디버그/로그">👁️</button>` : '',
                 `<button id="btn-open-system" class="w-8 h-8 bg-slate-700/80 hover:bg-slate-600 text-white rounded-full text-sm font-bold shadow-md transition-colors" title="시스템 메뉴">⚙️</button>`,
                 `</div>`,
                 `</div>`,
@@ -3044,7 +3061,8 @@ function renderDungeonExplore() {
                 return;
             }
             if (state.screen === 'title' && target.closest('#btn-title-version')) {
-                runCardFanShuffle('title-menu-fan', { withFlip: true });
+                ENABLE_DEBUG_TOOL = !ENABLE_DEBUG_TOOL;
+                syncTitleVersionDebugHint();
                 return;
             }
             if (target.closest('#btn-export-json')) {
@@ -3057,6 +3075,7 @@ function renderDungeonExplore() {
             }
 
             if (target.closest('#btn-open-debug')) {
+                if (!ENABLE_DEBUG_TOOL) return;
                 const modal = document.getElementById('debug-modal');
                 renderDebugModalContent();
                 modal.classList.remove('hidden');
@@ -4219,7 +4238,7 @@ function renderDungeonExplore() {
         // =======================================================================
 
         // 💡 [배포 스위치] 이 값을 false로 바꾸면 게임에서 디버그 툴이 완전히 사라집니다.
-        const ENABLE_DEBUG_TOOL = true;
+        let ENABLE_DEBUG_TOOL = false;
 
         // 1. 던전 테마 및 몬스터 데이터 설정
         let DUNGEON_THEMES = {
