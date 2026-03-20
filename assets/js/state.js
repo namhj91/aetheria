@@ -25,7 +25,8 @@
                 nation: 1,
                 npc: 1,
                 settlement: 1,
-                building: 1
+                building: 1,
+                hostileBand: 1
             },
             isAnimating: false,
             animatingLocation: null,
@@ -159,6 +160,7 @@
             npcs: [],
             origins: [],
             settlements: [],
+            hostileBands: [],
             gameDate: {
                 year: 52,
                 month: 3,
