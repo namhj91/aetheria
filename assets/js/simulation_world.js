@@ -117,6 +117,251 @@
             world_tree: 0.9
         };
 
+        const HOSTILE_BAND_TYPES = {
+            bandits: {
+                id: 'bandits',
+                name: '도적떼',
+                icon: '🗡️',
+                preferredTerrains: ['grass', 'forest', 'sand', 'tundra'],
+                roadBias: 1.8,
+                cityBias: 1.35
+            },
+            goblins: {
+                id: 'goblins',
+                name: '고블린 무리',
+                icon: '👺',
+                preferredTerrains: ['forest', 'jungle', 'swamp', 'tundra'],
+                roadBias: 0.85,
+                cityBias: 0.75
+            }
+        };
+
+        function ensureHostileBandState() {
+            if (!state.hostileBands) state.hostileBands = [];
+            if (!state.counters) state.counters = {};
+            if (typeof state.counters.hostileBand === 'undefined') state.counters.hostileBand = 1;
+        }
+
+        function getSettlementSecurityScore(s) {
+            if (!s) return 35;
+            const tierBonus = {
+                camp: 0,
+                village: 7,
+                town: 14,
+                city: 22,
+                metropolis: 30
+            };
+            let score = 20 + (tierBonus[s.type] || 0);
+            const buildings = s.buildings || [];
+            if (buildings.includes('guardhouse')) score += 14;
+            if (buildings.includes('castle')) score += 10;
+            if (buildings.includes('manor')) score += 6;
+            if (buildings.includes('training_ground')) score += 5;
+            score += Math.min(20, Math.floor((s.population || 0) / 70));
+            return Math.max(5, Math.min(95, score));
+        }
+
+        function updateSettlementSecurityScores() {
+            state.settlements.forEach(s => {
+                s.security = getSettlementSecurityScore(s);
+            });
+        }
+
+        function isHostileBandPassableTile(tile) {
+            if (!tile) return false;
+            return tile.type !== 'deep_water' && tile.type !== 'water';
+        }
+
+        function getNearestSettlementDist(x, y) {
+            let minDist = Infinity;
+            state.settlements.forEach(s => {
+                if (!s.tiles || s.tiles.length === 0) return;
+                const c = s.tiles[0];
+                const d = Math.abs(c.x - x) + Math.abs(c.y - y);
+                if (d < minDist) minDist = d;
+            });
+            return minDist;
+        }
+
+        function getNearestRoadDist(x, y, maxRadius = 7) {
+            for (let r = 0; r <= maxRadius; r++) {
+                for (let dy = -r; dy <= r; dy++) {
+                    const remain = r - Math.abs(dy);
+                    const xs = [x - remain, x + remain];
+                    for (let i = 0; i < xs.length; i++) {
+                        const nx = xs[i];
+                        const ny = y + dy;
+                        if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE) continue;
+                        if (state.worldMap[ny][nx].hasRoad) return r;
+                    }
+                }
+            }
+            return maxRadius + 1;
+        }
+
+        function calcHostileBandSpawnWeight(settlement, tile, bandType) {
+            if (!settlement || !tile || !bandType) return 0;
+            if (!isHostileBandPassableTile(tile) || tile.settlementId) return 0;
+
+            const center = settlement.tiles[0];
+            const dist = Math.abs(tile.x - center.x) + Math.abs(tile.y - center.y);
+            const security = Math.max(5, settlement.security || 35);
+            const distWeight = 0.3 + Math.min(1.8, dist / 4);
+            const securityWeight = Math.max(0.15, 1 - (security / 120));
+            const roadDist = getNearestRoadDist(tile.x, tile.y);
+            const roadWeight = Math.max(0.45, 1.35 - (roadDist * 0.12));
+            const nearestCityDist = getNearestSettlementDist(tile.x, tile.y);
+            const cityWeight = Math.max(0.45, 1.45 - (Math.max(0, 6 - nearestCityDist) * 0.12));
+            const terrainWeight = bandType.preferredTerrains.includes(tile.type) ? 1.2 : 0.7;
+            return distWeight * securityWeight * roadWeight * cityWeight * terrainWeight * bandType.roadBias * bandType.cityBias;
+        }
+
+        function calcGlobalHostileBandSpawnWeight(tile, bandType) {
+            if (!tile || !bandType) return 0;
+            if (!isHostileBandPassableTile(tile) || tile.settlementId) return 0;
+
+            const roadDist = getNearestRoadDist(tile.x, tile.y);
+            const roadWeight = Math.max(0.4, 1.4 - (roadDist * 0.14));
+            const nearestCityDist = getNearestSettlementDist(tile.x, tile.y);
+            const cityWeight = Math.max(0.5, 1.4 - (Math.max(0, 7 - nearestCityDist) * 0.12));
+            const terrainWeight = bandType.preferredTerrains.includes(tile.type) ? 1.15 : 0.75;
+
+            let influenceSuppression = 1.0;
+            if (tile.influencedBy) {
+                const owner = state.settlements.find(s => s.id === tile.influencedBy);
+                if (owner && owner.tiles && owner.tiles.length > 0) {
+                    const center = owner.tiles[0];
+                    const dist = Math.abs(center.x - tile.x) + Math.abs(center.y - tile.y);
+                    const security = Math.max(5, owner.security || getSettlementSecurityScore(owner));
+                    const nearCityPenalty = Math.max(0.2, Math.min(1.0, dist / 6));
+                    const securityPenalty = Math.max(0.2, 1 - (security / 110));
+                    influenceSuppression = nearCityPenalty * securityPenalty;
+                } else {
+                    influenceSuppression = 0.65;
+                }
+            }
+
+            return roadWeight * cityWeight * terrainWeight * influenceSuppression * bandType.roadBias * bandType.cityBias;
+        }
+
+        function isHostileBandDebugModeOn() {
+            if (typeof ENABLE_DEBUG_TOOL === 'undefined' || !ENABLE_DEBUG_TOOL) return false;
+            const floatingTool = document.getElementById('floating-debug-tool');
+            if (floatingTool && !floatingTool.classList.contains('hidden')) return true;
+            const debugModal = document.getElementById('debug-modal');
+            if (debugModal && !debugModal.classList.contains('hidden')) return true;
+            return false;
+        }
+
+        function spawnHostileBands() {
+            ensureHostileBandState();
+            updateSettlementSecurityScores();
+            if (!state.worldMap) return;
+            const cap = Math.max(6, Math.floor(state.settlements.length * 1.5));
+            const needed = cap - state.hostileBands.length;
+            if (needed <= 0) return;
+
+            const spawnCount = Math.min(2, needed);
+            for (let i = 0; i < spawnCount; i++) {
+                const typeKey = Math.random() < 0.65 ? 'bandits' : 'goblins';
+                const bandType = HOSTILE_BAND_TYPES[typeKey];
+                const weightedCandidates = [];
+
+                const sampledTiles = Math.min(220, MAP_SIZE * MAP_SIZE);
+                for (let s = 0; s < sampledTiles; s++) {
+                    const x = Math.floor(Math.random() * MAP_SIZE);
+                    const y = Math.floor(Math.random() * MAP_SIZE);
+                    const tile = state.worldMap[y][x];
+                    const weight = calcGlobalHostileBandSpawnWeight(tile, bandType);
+                    if (weight > 0.03) {
+                        weightedCandidates.push({
+                            x: tile.x,
+                            y: tile.y,
+                            settlementId: tile.influencedBy || null,
+                            weight
+                        });
+                    }
+                }
+
+                if (weightedCandidates.length === 0) continue;
+                let totalWeight = weightedCandidates.reduce((sum, c) => sum + c.weight, 0);
+                let roll = Math.random() * totalWeight;
+                let chosen = weightedCandidates[0];
+                for (let j = 0; j < weightedCandidates.length; j++) {
+                    roll -= weightedCandidates[j].weight;
+                    if (roll <= 0) {
+                        chosen = weightedCandidates[j];
+                        break;
+                    }
+                }
+
+                const spawnTile = state.worldMap[chosen.y][chosen.x];
+                if (!spawnTile) continue;
+                const overlap = state.hostileBands.find(b => b.x === chosen.x && b.y === chosen.y);
+                if (overlap) continue;
+
+                state.hostileBands.push({
+                    id: `hb_${state.counters.hostileBand++}`,
+                    typeId: bandType.id,
+                    name: bandType.name,
+                    icon: bandType.icon,
+                    x: chosen.x,
+                    y: chosen.y,
+                    originSettlementId: chosen.settlementId,
+                    threat: Math.floor(Math.random() * 5) + 1
+                });
+            }
+        }
+
+        function moveHostileBands() {
+            ensureHostileBandState();
+            if (!state.hostileBands || state.hostileBands.length === 0) return;
+            const occupied = new Set();
+
+            state.hostileBands.forEach(b => {
+                const type = HOSTILE_BAND_TYPES[b.typeId] || HOSTILE_BAND_TYPES.bandits;
+                const dirs = [
+                    [0, 0],
+                    [1, 0],
+                    [-1, 0],
+                    [0, 1],
+                    [0, -1],
+                    [1, 1],
+                    [-1, -1],
+                    [1, -1],
+                    [-1, 1]
+                ];
+                let best = { x: b.x, y: b.y, score: -Infinity };
+                dirs.forEach(d => {
+                    const nx = b.x + d[0];
+                    const ny = b.y + d[1];
+                    if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE) return;
+                    const tile = state.worldMap[ny][nx];
+                    if (!isHostileBandPassableTile(tile) || tile.settlementId) return;
+                    const key = `${nx},${ny}`;
+                    if (occupied.has(key)) return;
+
+                    let score = Math.random() * 0.4;
+                    if (type.preferredTerrains.includes(tile.type)) score += 0.7;
+                    if (tile.hasRoad) score += (b.typeId === 'bandits') ? 0.9 : 0.1;
+                    const nearSettlement = getNearestSettlementDist(nx, ny);
+                    if (b.typeId === 'bandits') score += Math.max(0, 1.2 - (nearSettlement * 0.15));
+                    else score += Math.min(0.8, nearSettlement * 0.08);
+                    if (d[0] === 0 && d[1] === 0) score += 0.08;
+                    if (score > best.score) best = { x: nx, y: ny, score };
+                });
+
+                b.x = best.x;
+                b.y = best.y;
+                occupied.add(`${b.x},${b.y}`);
+
+                if (state.player && state.player.location && state.player.location.x === b.x && state.player.location.y === b.y) {
+                    showToast(`⚠️ ${b.name}와 조우했습니다!`);
+                    addTurnLog(`[위협 조우] ${b.icon} <span class="text-rose-300 font-bold">${b.name}</span>가 길목에 출몰했습니다.`);
+                }
+            });
+        }
+
         function getTileFoodYield(tileType) {
             return (FOOD_TILE_YIELD[tileType] !== undefined) ? FOOD_TILE_YIELD[tileType] : 0.2;
         }
@@ -655,8 +900,11 @@
                 processCultureExpansion(s, 1, false);
                 foundNationFromSettlement(s, false);
             });
+            updateSettlementSecurityScores();
             updateSettlementInfluences();
             updateNationBordersFromInfluence();
+            spawnHostileBands();
+            moveHostileBands();
             triggerNPCAmbitionEvents();
             renderActionQueueBar();
 
@@ -2536,12 +2784,14 @@
                 week: 1
             };
             state.settlements = [];
+            state.hostileBands = [];
             state.history.nations = [];
             state.npcs = [];
             state.counters.nation = 1;
             state.counters.npc = 1;
             state.counters.settlement = 1;
             state.counters.building = 1;
+            state.counters.hostileBand = 1;
             state.history.nationNamePool = (NATION_TEMPLATES || []).map(t => ({ ...t }));
             state.history.isRunning = true;
             state.history.isFinished = false;
@@ -3370,6 +3620,26 @@
                 }
             });
 
+            if (state.hostileBands && state.hostileBands.length > 0) {
+                const showDebugBands = isHostileBandDebugModeOn();
+                if (showDebugBands) {
+                    state.hostileBands.forEach(b => {
+                        if (b.x < startX || b.x > endX || b.y < startY || b.y > endY) return;
+                        const px = b.x * state.tileSize + (state.tileSize / 2);
+                        const py = b.y * state.tileSize + (state.tileSize / 2);
+                        if (state.tileSize > 10) {
+                            pCtx.font = `${Math.max(11, state.tileSize * 1.0)}px Arial`;
+                            pCtx.fillText(b.icon || '⚠️', px, py);
+                        } else {
+                            pCtx.fillStyle = '#dc2626';
+                            pCtx.beginPath();
+                            pCtx.arc(px, py, Math.max(2, state.tileSize / 3), 0, Math.PI * 2);
+                            pCtx.fill();
+                        }
+                    });
+                }
+            }
+
             if (state.screen === 'world' || state.screen === 'history') {
                 let pathAction = state.player.actionQueue ? state.player.actionQueue.find(a => a.type === 'travel') : null;
                 if (pathAction && pathAction.path && pathAction.path.length > 0 && !state.isAnimating) {
@@ -3531,6 +3801,12 @@
                 if (infS) influenceInfo = `<span class="text-indigo-400 font-bold">${infS.name}의 영지</span>`;
             }
 
+            const showHostileBandInfo = isHostileBandDebugModeOn();
+            const hostileBand = showHostileBandInfo ? (state.hostileBands || []).find(b => b.x === tx && b.y === ty) : null;
+            if (hostileBand && showHostileBandInfo) {
+                influenceInfo += `<br><span class="text-rose-300 font-bold">${hostileBand.icon} ${hostileBand.name} 출몰</span>`;
+            }
+
             document.getElementById('modal-tile-name').innerText = tile.name;
             document.getElementById('modal-tile-coords').innerText = `X: ${tx}, Y: ${ty}`;
             document.getElementById('modal-tile-nation').innerText = nationName;
@@ -3586,7 +3862,4 @@
             modal.classList.remove('-translate-x-full', 'opacity-0', 'pointer-events-none');
             modal.classList.add('translate-x-0', 'opacity-100', 'pointer-events-auto');
         }
-
-
-
 
