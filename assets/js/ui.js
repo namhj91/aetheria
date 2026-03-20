@@ -3062,6 +3062,7 @@ function renderDungeonExplore() {
             }
             if (state.screen === 'title' && target.closest('#btn-title-version')) {
                 ENABLE_DEBUG_TOOL = !ENABLE_DEBUG_TOOL;
+                showToast(ENABLE_DEBUG_TOOL ? '디버그 모드가 활성화되었습니다.' : '디버그 모드가 비활성화되었습니다.');
                 syncTitleVersionDebugHint();
                 return;
             }
@@ -3075,7 +3076,6 @@ function renderDungeonExplore() {
             }
 
             if (target.closest('#btn-open-debug')) {
-                if (!ENABLE_DEBUG_TOOL) return;
                 const modal = document.getElementById('debug-modal');
                 renderDebugModalContent();
                 modal.classList.remove('hidden');
