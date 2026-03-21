@@ -3507,15 +3507,13 @@
         function maybeSpawnSaint(currentYear, sortedNations = []) {
             if (hasMajorFigureRole('saint')) return;
             if (!state.settlements || state.settlements.length <= 0) return;
-            const holySettlements = state.settlements.filter(s => s.buildings && s.buildings.includes('grand_cathedral'));
+            if (!state.history.holyNationId) return;
+            const holySettlements = state.settlements.filter(s => s.buildings && s.buildings.includes('grand_cathedral') && s.nationId === state.history.holyNationId);
             if (holySettlements.length <= 0) return;
             let target = holySettlements.sort((a, b) => (b.population || 0) - (a.population || 0))[0];
-            if (state.history.holyNationId) {
-                const holyNationSeat = holySettlements.find(s => s.nationId === state.history.holyNationId);
-                if (holyNationSeat) target = holyNationSeat;
-            }
             createHistoryMajorFigure('saint', currentYear, sortedNations, {
-                targetSettlement: target
+                targetSettlement: target,
+                homeNationId: state.history.holyNationId
             });
         }
 
@@ -3675,9 +3673,13 @@
             }
 
             if (figure.role === 'saint') {
-                const holyHome = state.settlements.find(s => s.id === figure.homeSettlementId);
+                const holyNationId = state.history.holyNationId;
+                if (!holyNationId) return null;
+                const holyHome = state.settlements.find(s => s.id === figure.homeSettlementId && s.nationId === holyNationId);
                 if (holyHome) return holyHome;
-                return state.settlements.find(s => s.buildings && s.buildings.includes('grand_cathedral')) || state.settlements[0];
+                const holyNationCathedral = state.settlements.find(s => s.nationId === holyNationId && s.buildings && s.buildings.includes('grand_cathedral'));
+                if (holyNationCathedral) return holyNationCathedral;
+                return state.settlements.find(s => s.nationId === holyNationId) || null;
             }
 
             if (figure.role === 'mage_tower_master') {
