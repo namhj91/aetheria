@@ -812,7 +812,7 @@ function renderDungeonExplore() {
             }
 
             const changelog = await res.text();
-            const match = changelog.match(/^##\s+(Ver[^\n]+)/m);
+            const match = changelog.match(/^##\s+((?:[Vv]er\.?[^\n]+))/m);
             if (!match) {
                 versionEl.textContent = 'Ver 정보 없음';
                 return;

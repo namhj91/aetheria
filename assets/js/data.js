@@ -483,6 +483,26 @@
                 cat: 'physical',
                 reqGender: null
             },
+            tower_master: {
+                id: 'tower_master',
+                name: '마탑주',
+                tier: '유일',
+                icon: '🧙',
+                desc: '마탑의 심장부에서 연구를 거듭해 마법 지식과 이론 체계를 비약적으로 발전시킵니다.',
+                acq: 'innate',
+                cat: 'mental',
+                reqGender: null
+            },
+            saintess: {
+                id: 'saintess',
+                name: '성녀',
+                tier: '유일',
+                icon: '✨',
+                desc: '성스러운 영역 안에서 신앙과 치유의 권능을 발휘해 공동체를 안정시킵니다.',
+                acq: 'innate',
+                cat: 'other',
+                reqGender: 'F'
+            },
             tree_blessing: {
                 id: 'tree_blessing',
                 name: '세계수의 축복',
