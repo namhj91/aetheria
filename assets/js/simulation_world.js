@@ -2908,16 +2908,20 @@
                 cores: [],
                 tiles: {},
                 splitRadius: 6,
-                battleRange: 2
+                battleRange: 2,
+                minExpansionSteps: 1,
+                maxExpansionSteps: 3
             };
             state.history.threats = {
                 nextBandId: 1,
                 demonLord: {
                     active: false,
                     castle: null,
-                    spawnIntervalTurns: 20,
+                    minSpawnIntervalTurns: 12,
+                    maxSpawnIntervalTurns: 28,
                     nextSpawnTurn: 0,
-                    bands: []
+                    bands: [],
+                    maxBands: 5
                 },
                 dragon: {
                     active: false,
@@ -2939,7 +2943,9 @@
                     cores: [],
                     tiles: {},
                     splitRadius: 6,
-                    battleRange: 2
+                    battleRange: 2,
+                    minExpansionSteps: 1,
+                    maxExpansionSteps: 3
                 };
             }
             return state.history.otherworld;
@@ -2952,9 +2958,11 @@
                     demonLord: {
                         active: false,
                         castle: null,
-                        spawnIntervalTurns: 20,
+                        minSpawnIntervalTurns: 12,
+                        maxSpawnIntervalTurns: 28,
                         nextSpawnTurn: 0,
-                        bands: []
+                        bands: [],
+                        maxBands: 5
                     },
                     dragon: {
                         active: false,
@@ -3145,7 +3153,15 @@
             const o = getOtherworldState();
             if (!o.active) return;
             o.cores.forEach(core => {
-                if (core.alive) expandOtherworldCore(core);
+                if (!core.alive) return;
+                const minSteps = Math.max(1, o.minExpansionSteps || 1);
+                const maxSteps = Math.max(minSteps, o.maxExpansionSteps || 3);
+                const steps = minSteps + Math.floor(Math.random() * ((maxSteps - minSteps) + 1));
+                for (let i = 0; i < steps; i++) {
+                    if (!core.alive) break;
+                    if (i > 0 && Math.random() < 0.2) break;
+                    expandOtherworldCore(core);
+                }
             });
             resolveOtherworldSettlementConflicts(currentYear);
 
@@ -3212,6 +3228,43 @@
             return `${prefixes[Math.floor(Math.random() * prefixes.length)]} ${suffixes[Math.floor(Math.random() * suffixes.length)]}`;
         }
 
+        function getRandomDemonSpawnInterval(lord) {
+            const minTurn = Math.max(2, lord.minSpawnIntervalTurns || 12);
+            const maxTurn = Math.max(minTurn, lord.maxSpawnIntervalTurns || 28);
+            return minTurn + Math.floor(Math.random() * ((maxTurn - minTurn) + 1));
+        }
+
+        function stepDemonBandWithVariation(band, targetRoot) {
+            const dirs = [
+                [0, 1], [1, 0], [0, -1], [-1, 0],
+                [1, 1], [1, -1], [-1, 1], [-1, -1]
+            ];
+            const candidates = [];
+            dirs.forEach(([dx, dy]) => {
+                const nx = band.x + dx;
+                const ny = band.y + dy;
+                if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE) return;
+                const tile = state.worldMap[ny][nx];
+                if (!tile || tile.type === 'deep_water' || tile.type === 'water' || tile.type === 'lake') return;
+                const dist = Math.abs(targetRoot.x - nx) + Math.abs(targetRoot.y - ny);
+                let score = 100 - (dist * 12);
+                if (tile.hasRoad) score += 15;
+                if (Math.random() < 0.2) score += Math.random() * 25;
+                if (Math.random() < 0.18) score -= 20 + (Math.random() * 12);
+                candidates.push({
+                    nx,
+                    ny,
+                    score
+                });
+            });
+            if (candidates.length <= 0) return;
+            candidates.sort((a, b) => b.score - a.score);
+            const chooseIndex = Math.random() < 0.72 ? 0 : Math.floor(Math.random() * Math.min(3, candidates.length));
+            const chosen = candidates[chooseIndex];
+            band.x = chosen.nx;
+            band.y = chosen.ny;
+        }
+
         function activateDemonLordThreat(currentYear) {
             const threats = getHistoryThreatState();
             if (threats.demonLord.active) return;
@@ -3225,7 +3278,7 @@
                 x: pos.x,
                 y: pos.y
             };
-            threats.demonLord.nextSpawnTurn = state.history.currentTurn + threats.demonLord.spawnIntervalTurns;
+            threats.demonLord.nextSpawnTurn = state.history.currentTurn + getRandomDemonSpawnInterval(threats.demonLord);
             const tile = state.worldMap[pos.y][pos.x];
             if (tile) tile.type = 'volcano';
             state.history.logs.unshift(`[${currentYear}년] 👑 [월드 이벤트] 마왕성이 (${pos.x}, ${pos.y})에 강림했습니다.`);
@@ -3236,7 +3289,7 @@
             const lord = threats.demonLord;
             if (!lord.active || !lord.castle) return;
 
-            if (state.history.currentTurn >= lord.nextSpawnTurn) {
+            if (state.history.currentTurn >= lord.nextSpawnTurn && lord.bands.length < (lord.maxBands || 5)) {
                 const band = {
                     id: `dl_band_${threats.nextBandId++}`,
                     name: generateDemonBandName(),
@@ -3247,7 +3300,7 @@
                     power: 120 + Math.random() * 90 + (state.history.currentTurn * 0.08)
                 };
                 lord.bands.push(band);
-                lord.nextSpawnTurn += lord.spawnIntervalTurns;
+                lord.nextSpawnTurn = state.history.currentTurn + getRandomDemonSpawnInterval(lord);
                 state.history.logs.unshift(`[${currentYear}년] 🩸 [마왕군] 마왕성에서 ${band.name}(${band.id})이(가) 출진했습니다.`);
             }
 
@@ -3260,10 +3313,7 @@
                 if (!root) return;
                 band.prevX = band.x;
                 band.prevY = band.y;
-                const dx = Math.sign(root.x - band.x);
-                const dy = Math.sign(root.y - band.y);
-                band.x += dx;
-                band.y += dy;
+                stepDemonBandWithVariation(band, root);
 
                 const arrived = (band.x === root.x && band.y === root.y);
                 if (!arrived) {
@@ -4477,6 +4527,7 @@
 
             const hatch = getHatchPattern(ctx);
             const borderPaths = new Map();
+            const otherworld = getOtherworldState();
 
             // Draw cached base terrain (only visible area)
             const sx = viewLeft * state.tileSize;
@@ -4509,6 +4560,16 @@
                         ctx.fillStyle = '#a855f7';
                         ctx.fillRect(px, py, ts, ts);
                         ctx.globalAlpha = 1.0;
+                    }
+                    const otherworldTile = otherworld.tiles && otherworld.tiles[getOtherworldKey(x, y)];
+                    if (otherworldTile) {
+                        ctx.globalAlpha = 0.42;
+                        ctx.fillStyle = 'rgba(139,92,246,0.95)';
+                        ctx.fillRect(px, py, ts, ts);
+                        ctx.globalAlpha = 1.0;
+                        ctx.strokeStyle = 'rgba(196,181,253,0.65)';
+                        ctx.lineWidth = Math.max(1, ts * 0.08);
+                        ctx.strokeRect(px + 0.5, py + 0.5, Math.max(1, ts - 1), Math.max(1, ts - 1));
                     }
 
                     // 2. 국경선 로직
@@ -4956,11 +5017,29 @@
                 influenceInfo += `<br><span class="text-rose-300 font-bold">${hostileBand.icon} ${hostileBand.name} 출몰</span>`;
             }
 
+            const threats = getHistoryThreatState();
+            const otherworld = getOtherworldState();
+            const threatTexts = [];
+            const tileOtherworld = otherworld.tiles && otherworld.tiles[getOtherworldKey(tx, ty)];
+            const core = (otherworld.cores || []).find(c => c.alive && c.x === tx && c.y === ty);
+            if (core) threatTexts.push(`<span class="text-violet-300 font-bold">🌀 이계 중심핵 (세대 ${core.generation + 1})</span>`);
+            if (tileOtherworld) threatTexts.push(`<span class="text-violet-200">이계 침식 타일</span>`);
+            if (threats.demonLord && threats.demonLord.active && threats.demonLord.castle && threats.demonLord.castle.x === tx && threats.demonLord.castle.y === ty) {
+                threatTexts.push(`<span class="text-rose-300 font-bold">🏰 마왕성</span>`);
+            }
+            const demonBand = threats.demonLord && threats.demonLord.bands ? threats.demonLord.bands.find(b => b.x === tx && b.y === ty) : null;
+            if (demonBand) threatTexts.push(`<span class="text-rose-200">⚔️ ${demonBand.name}</span>`);
+            if (threats.dragon && threats.dragon.active && threats.dragon.nest && threats.dragon.nest.x === tx && threats.dragon.nest.y === ty) {
+                threatTexts.push(`<span class="text-orange-200 font-bold">🐉 드래곤 둥지</span>`);
+            }
+            const threatInfo = threatTexts.length > 0 ? threatTexts.join('<br>') : '<span class="text-slate-500">없음</span>';
+
             document.getElementById('modal-tile-name').innerText = tile.name;
             document.getElementById('modal-tile-coords').innerText = `X: ${tx}, Y: ${ty}`;
             document.getElementById('modal-tile-nation').innerText = nationName;
             document.getElementById('modal-tile-settlement').innerHTML = settlementInfo;
             document.getElementById('modal-tile-influence').innerHTML = influenceInfo;
+            document.getElementById('modal-tile-threat').innerHTML = threatInfo;
             document.getElementById('modal-tile-mana').innerText = `${Math.floor(tile.mana * 100)}%`;
 
             const resContainer = document.getElementById('modal-tile-resource-container');
