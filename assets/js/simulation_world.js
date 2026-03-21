@@ -2910,6 +2910,7 @@
         // 7. 역사 시뮬레이션
         // ==========================================
         function initHistorySimulation() {
+            const historyTurnIntervalMs = 700;
             state.tileSize = 4; // 줌아웃 상태로 시작
             state.worldMap = generateWorldMap(MAP_SIZE, MAP_SIZE);
             if (typeof minimapCache !== 'undefined') minimapCache.dirty = true;
@@ -2932,9 +2933,10 @@
             state.history.nationNamePool = (NATION_TEMPLATES || []).map(t => ({ ...t }));
             state.history.isRunning = true;
             state.history.isFinished = false;
+            state.history.isPaused = false;
             state.history.isPausedForEvent = false;
-            state.history.nextWorldEventTurn = 100;
             state.history.pendingWorldEventChoices = [];
+            state.history.turnIntervalMs = historyTurnIntervalMs;
         }
 
         function generateHistoryWorldEventChoices() {
@@ -3042,6 +3044,7 @@
             if (state.history.intervalId) clearTimeout(state.history.intervalId);
             state.history.intervalId = null;
             state.history.isRunning = false;
+            state.history.isPaused = false;
             state.history.isPausedForEvent = false;
             state.history.pendingWorldEventChoices = [];
             state.history.isFinished = true;
@@ -3074,7 +3077,7 @@
         }
 
         function stepHistorySimulation() {
-            if (!state.history.isRunning || state.history.isFinished || state.history.isPausedForEvent) return;
+            if (!state.history.isRunning || state.history.isFinished || state.history.isPaused || state.history.isPausedForEvent) return;
             const chunk = 10;
             const currentYear = state.gameDate.year + state.history.currentTurn;
             const disaster = processHistorySettlements(chunk);
@@ -3112,23 +3115,16 @@
             if (typeof showToast === 'function') {
                 const toastMsg = String(logMsg).replace(/<[^>]*>/g, '');
                 showToast(toastMsg, false, {
-                    variant: 'history-log'
+                    variant: 'history-log',
+                    durationMs: 700,
+                    fadeOutMs: 250
                 });
             }
             state.history.currentTurn += chunk;
             renderHistoryUI();
 
-            if (state.history.currentTurn >= state.history.nextWorldEventTurn) {
-                state.history.isPausedForEvent = true;
-                state.history.nextWorldEventTurn += 100;
-                state.history.pendingWorldEventChoices = generateHistoryWorldEventChoices();
-                state.history.logs.unshift(`[${state.gameDate.year + state.history.currentTurn}년] [시스템] 시대의 갈림길이 도래했습니다. 월드 이벤트를 선택하세요.`);
-                renderHistoryUI();
-                return;
-            }
-
-            if (state.history.isRunning && !state.history.isPausedForEvent) {
-                state.history.intervalId = setTimeout(stepHistorySimulation, 180);
+            if (state.history.isRunning && !state.history.isPaused && !state.history.isPausedForEvent) {
+                state.history.intervalId = setTimeout(stepHistorySimulation, state.history.turnIntervalMs || 700);
             }
         }
 
@@ -3138,8 +3134,8 @@
             state.history.pendingWorldEventChoices = [];
             state.history.isPausedForEvent = false;
             renderHistoryUI();
-            if (state.history.isRunning) {
-                state.history.intervalId = setTimeout(stepHistorySimulation, 220);
+            if (state.history.isRunning && !state.history.isPaused) {
+                state.history.intervalId = setTimeout(stepHistorySimulation, state.history.turnIntervalMs || 700);
             }
         }
 
