@@ -976,8 +976,13 @@
                 return ent.age >= adultAge && ent.age <= fertileEnd;
             };
             const linkMarriage = (a, b) => {
+                if (!a || !b || a.id === b.id) return;
+                const prevA = (a.spouseId && a.spouseId !== b.id) ? state.npcs.find(n => n.id === a.spouseId) : null;
+                const prevB = (b.spouseId && b.spouseId !== a.id) ? state.npcs.find(n => n.id === b.spouseId) : null;
                 a.spouseId = b.id;
                 b.spouseId = a.id;
+                if (prevA && prevA.spouseId === a.id) prevA.spouseId = null;
+                if (prevB && prevB.spouseId === b.id) prevB.spouseId = null;
             };
             const processSexAndPregnancy = (a, b) => {
                 const compatibility = getSexCompatibility(a, b);
@@ -1005,6 +1010,19 @@
                     };
                 }
             };
+
+            // 💡 배우자 정보가 끊기거나 단방향으로 남지 않도록 정규화
+            state.npcs.forEach(npc => {
+                if (!npc || !npc.spouseId) return;
+                const spouse = state.npcs.find(n => n.id === npc.spouseId);
+                if (!spouse || spouse.isDead || npc.isDead || spouse.id === npc.id) {
+                    npc.spouseId = null;
+                    return;
+                }
+                if (spouse.spouseId !== npc.id) {
+                    linkMarriage(npc, spouse);
+                }
+            });
 
             for (let key in locationGroups) {
                 const group = locationGroups[key].filter(isAdult);
@@ -1566,7 +1584,16 @@
                     });
                 } else if (roll < 0.6 && maleAdults.length > 0 && femaleAdults.length > 0) {
                     let father = maleAdults[Math.floor(Math.random() * maleAdults.length)];
-                    let mother = femaleAdults[Math.floor(Math.random() * femaleAdults.length)];
+                    let sameRaceMothers = femaleAdults.filter(n => n.race === father.race);
+                    if (sameRaceMothers.length === 0) {
+                        choices.push({
+                            type: 'orphan',
+                            title: '부모 미상의 고아',
+                            desc: '천애고아로 자랐습니다. 얽힌 인연 없이 자유롭게 운명을 개척합니다.'
+                        });
+                        continue;
+                    }
+                    let mother = sameRaceMothers[Math.floor(Math.random() * sameRaceMothers.length)];
 
                     choices.push({
                         type: 'npc_child',
@@ -1575,7 +1602,7 @@
                             father: father
                         },
                         title: `${father.lastName.trim()} 가문의 자녀`, // 💡 아버지의 성(가문명) 사용
-                        desc: `아버지(${father.lastName.trim()} 가문)의 성을 따르며, 모친(${RACES[mother.race].name})의 혈통을 이어받습니다.`
+                        desc: `아버지(${father.lastName.trim()} 가문)와 어머니(${RACES[mother.race].name}) 모두 ${RACES[father.race].name} 혈통입니다.`
                     });
                 } else {
                     choices.push({
