@@ -2938,6 +2938,7 @@
                 }
             };
             state.history.majorFigures = [];
+            state.history.holyNationId = null;
             state.history.turnIntervalMs = historyTurnIntervalMs;
         }
 
@@ -3508,10 +3509,42 @@
             if (!state.settlements || state.settlements.length <= 0) return;
             const holySettlements = state.settlements.filter(s => s.buildings && s.buildings.includes('grand_cathedral'));
             if (holySettlements.length <= 0) return;
-            const target = holySettlements.sort((a, b) => (b.population || 0) - (a.population || 0))[0];
+            let target = holySettlements.sort((a, b) => (b.population || 0) - (a.population || 0))[0];
+            if (state.history.holyNationId) {
+                const holyNationSeat = holySettlements.find(s => s.nationId === state.history.holyNationId);
+                if (holyNationSeat) target = holyNationSeat;
+            }
             createHistoryMajorFigure('saint', currentYear, sortedNations, {
                 targetSettlement: target
             });
+        }
+
+        function maybeFoundHolyNation(currentYear) {
+            if (state.history.holyNationId) return;
+            if (!state.settlements || state.settlements.length <= 0) return;
+
+            const holySeat = state.settlements
+                .filter(s => s.buildings && s.buildings.includes('grand_cathedral') && getSettlementTierRank(s.type) >= getSettlementTierRank('town'))
+                .sort((a, b) => (b.population || 0) - (a.population || 0))[0];
+            if (!holySeat) return;
+
+            let nation = holySeat.nationId ? state.history.nations.find(n => n.id === holySeat.nationId) : null;
+            if (!nation) {
+                nation = foundNationFromSettlement(holySeat, true);
+            }
+            if (!nation) return;
+
+            nation.name = '성국';
+            nation.desc = '신성한 교단과 성좌를 중심으로 질서를 수호하는 유일한 성국입니다.';
+            nation.isHolyNation = true;
+            nation.holySeatSettlementId = holySeat.id;
+            state.history.holyNationId = nation.id;
+            holySeat.nationId = nation.id;
+
+            const ruler = getLeaderEntity(nation.rulerId);
+            if (ruler) ruler.status = '성왕';
+
+            state.history.logs.unshift(`[${currentYear}년] ⛪ [건국] ${holySeat.name}을(를) 중심으로 유일한 성국이 건국되었습니다.`);
         }
 
         function maybePromoteEmperor(currentYear, sortedNations = [], nationSnapshotMap = {}) {
@@ -3562,6 +3595,7 @@
 
         function evaluateConditionalMajorFigureSpawns(currentYear, sortedNations = [], tileCounts = {}) {
             const nationSnapshotMap = getNationSnapshotMap(sortedNations, tileCounts);
+            maybeFoundHolyNation(currentYear);
             maybeSpawnSaint(currentYear, sortedNations);
             maybePromoteEmperor(currentYear, sortedNations, nationSnapshotMap);
             maybeSpawnSwordSaint(currentYear, sortedNations);
