@@ -2380,6 +2380,7 @@ function renderDungeonExplore() {
                 `<div class="flex justify-between border-b border-slate-700 pb-1"><span class="text-slate-400">소속 국가</span><span id="modal-tile-nation" class="font-bold text-white">무소속</span></div>`,
                 `<div class="flex justify-between border-b border-slate-700 pb-1"><span class="text-slate-400">정착지</span><span id="modal-tile-settlement" class="font-bold text-amber-300">없음</span></div>`,
                 `<div class="flex justify-between border-b border-slate-700 pb-1"><span class="text-slate-400">영향권 소속</span><span id="modal-tile-influence" class="font-bold text-indigo-300">없음</span></div>`,
+                `<div class="flex justify-between border-b border-slate-700 pb-1"><span class="text-slate-400">위협 정보</span><span id="modal-tile-threat" class="font-bold text-rose-300 text-right">없음</span></div>`,
                 `<div class="flex justify-between border-b border-slate-700 pb-1"><span class="text-purple-400">마나 농도</span><span id="modal-tile-mana" class="font-bold text-purple-300">0%</span></div>`,
                 `</div>`,
                 `<div id="ui-move-panel" class="hidden flex-col items-center gap-2 mt-4 pt-4 border-t border-slate-700">`,
