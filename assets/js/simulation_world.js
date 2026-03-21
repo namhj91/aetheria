@@ -514,38 +514,6 @@
             if (s.popCap && s.population > s.popCap) s.population = s.popCap;
         }
 
-        function rollHistoryDisaster() {
-            const roll = Math.random();
-            if (roll < 0.08) {
-                return {
-                    type: 'famine',
-                    name: 'Famine',
-                    foodMultiplier: 0.5,
-                    popLossRate: 0.06,
-                    log: 'Widespread famine reduced harvests and population.'
-                };
-            }
-            if (roll < 0.14) {
-                return {
-                    type: 'plague',
-                    name: 'Plague',
-                    foodMultiplier: 0.85,
-                    popLossRate: 0.12,
-                    log: 'A deadly plague swept across settlements.'
-                };
-            }
-            if (roll < 0.2) {
-                return {
-                    type: 'drought',
-                    name: 'Drought',
-                    foodMultiplier: 0.6,
-                    popLossRate: 0.03,
-                    log: 'Prolonged drought devastated crops and water supplies.'
-                };
-            }
-            return null;
-        }
-
         function processEntityActionStep(ent, apAmount) {
             if (!ent.actionQueue || ent.actionQueue.length === 0) return;
             ent.apPool = (ent.apPool || 0) + apAmount;
@@ -2885,10 +2853,9 @@
             return s;
         }
 
-        function processHistorySettlements(weeks = 100) {
-            const disaster = rollHistoryDisaster();
+        function processHistorySettlements(weeks = 100, settlementModifiers = null) {
             state.settlements.forEach(s => {
-                updateSettlementFoodAndPopulation(s, weeks, true, disaster);
+                updateSettlementFoodAndPopulation(s, weeks, true, settlementModifiers);
                 checkSettlementUpgrades(s);
                 processCultureExpansion(s, weeks, true);
                 foundNationFromSettlement(s, true);
@@ -2903,7 +2870,6 @@
                     createSettlement(generateSettlementName(), t.x, t.y, null, Math.floor(Math.random() * 150) + 50);
                 }
             }
-            return disaster;
         }
 
         // ==========================================
@@ -2936,48 +2902,917 @@
             state.history.isPaused = false;
             state.history.isPausedForEvent = false;
             state.history.pendingWorldEventChoices = [];
+            state.history.otherworld = {
+                active: false,
+                nextCoreId: 1,
+                cores: [],
+                tiles: {},
+                splitRadius: 6,
+                battleRange: 2
+            };
+            state.history.threats = {
+                nextBandId: 1,
+                demonLord: {
+                    active: false,
+                    castle: null,
+                    spawnIntervalTurns: 20,
+                    nextSpawnTurn: 0,
+                    bands: []
+                },
+                dragon: {
+                    active: false,
+                    nest: null,
+                    cooldownTurns: 12,
+                    nextRaidTurn: 0
+                }
+            };
+            state.history.majorFigures = [];
             state.history.turnIntervalMs = historyTurnIntervalMs;
         }
 
+        function getOtherworldState() {
+            if (!state.history.otherworld) {
+                state.history.otherworld = {
+                    active: false,
+                    nextCoreId: 1,
+                    cores: [],
+                    tiles: {},
+                    splitRadius: 6,
+                    battleRange: 2
+                };
+            }
+            return state.history.otherworld;
+        }
+
+        function getHistoryThreatState() {
+            if (!state.history.threats) {
+                state.history.threats = {
+                    nextBandId: 1,
+                    demonLord: {
+                        active: false,
+                        castle: null,
+                        spawnIntervalTurns: 20,
+                        nextSpawnTurn: 0,
+                        bands: []
+                    },
+                    dragon: {
+                        active: false,
+                        nest: null,
+                        cooldownTurns: 12,
+                        nextRaidTurn: 0
+                    }
+                };
+            }
+            return state.history.threats;
+        }
+
+        function getHistoryMajorFigures() {
+            if (!state.history.majorFigures) state.history.majorFigures = [];
+            return state.history.majorFigures;
+        }
+
+        function getOtherworldKey(x, y) {
+            return `${x},${y}`;
+        }
+
+        function getRandomOtherworldCoreTile() {
+            const candidates = [];
+            for (let y = 0; y < MAP_SIZE; y++) {
+                for (let x = 0; x < MAP_SIZE; x++) {
+                    const tile = state.worldMap[y][x];
+                    if (!tile) continue;
+                    if (tile.type === 'deep_water' || tile.type === 'water' || tile.type === 'lake') continue;
+                    if (tile.settlementId) continue;
+                    candidates.push({
+                        x,
+                        y
+                    });
+                }
+            }
+            if (candidates.length <= 0) return null;
+            return candidates[Math.floor(Math.random() * candidates.length)];
+        }
+
+        function markOtherworldCorruption(core, x, y) {
+            if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) return;
+            const tile = state.worldMap[y][x];
+            if (!tile || tile.type === 'deep_water' || tile.type === 'water' || tile.type === 'lake') return;
+
+            const o = getOtherworldState();
+            const key = getOtherworldKey(x, y);
+            if (!o.tiles[key]) {
+                o.tiles[key] = {
+                    x,
+                    y,
+                    originalType: tile.type,
+                    coreIds: [core.id]
+                };
+            } else if (!o.tiles[key].coreIds.includes(core.id)) {
+                o.tiles[key].coreIds.push(core.id);
+            }
+
+            if (!core.corruptedKeys.includes(key)) core.corruptedKeys.push(key);
+            tile.type = 'crystal_cave';
+        }
+
+        function spawnOtherworldCore(x, y, generation = 0, parentId = null) {
+            const o = getOtherworldState();
+            const core = {
+                id: o.nextCoreId++,
+                x,
+                y,
+                generation,
+                parentId,
+                radius: 0,
+                spawnedChild: false,
+                alive: true,
+                corruptedKeys: []
+            };
+            o.cores.push(core);
+            markOtherworldCorruption(core, x, y);
+            return core;
+        }
+
+        function activateOtherworldErosion(currentYear) {
+            const o = getOtherworldState();
+            if (o.active && o.cores.some(c => c.alive)) return;
+            const pos = getRandomOtherworldCoreTile();
+            if (!pos) {
+                state.history.logs.unshift(`[${currentYear}년] 🌀 [월드 이벤트] 이계 침식이 시도되었지만 안정적인 핵이 자리잡지 못했습니다.`);
+                return;
+            }
+            o.active = true;
+            const core = spawnOtherworldCore(pos.x, pos.y, 0, null);
+            state.history.logs.unshift(`[${currentYear}년] 🌀 [월드 이벤트] 이계 중심핵이 (${core.x}, ${core.y})에 생성되었습니다.`);
+        }
+
+        function expandOtherworldCore(core) {
+            if (!core.alive) return;
+            const nextRadius = core.radius + 1;
+            const ringTiles = [];
+            for (let dy = -nextRadius; dy <= nextRadius; dy++) {
+                for (let dx = -nextRadius; dx <= nextRadius; dx++) {
+                    const manhattan = Math.abs(dx) + Math.abs(dy);
+                    if (manhattan !== nextRadius) continue;
+                    const tx = core.x + dx;
+                    const ty = core.y + dy;
+                    if (tx < 0 || tx >= MAP_SIZE || ty < 0 || ty >= MAP_SIZE) continue;
+                    markOtherworldCorruption(core, tx, ty);
+                    ringTiles.push({
+                        x: tx,
+                        y: ty
+                    });
+                }
+            }
+            core.radius = nextRadius;
+            if (!core.spawnedChild && core.radius >= getOtherworldState().splitRadius && ringTiles.length > 0) {
+                const pos = ringTiles[Math.floor(Math.random() * ringTiles.length)];
+                spawnOtherworldCore(pos.x, pos.y, core.generation + 1, core.id);
+                core.spawnedChild = true;
+            }
+        }
+
+        function computeSettlementDefensePower(settlement) {
+            const tier = Math.max(0, getSettlementTierRank(settlement.type));
+            const popPower = Math.sqrt(Math.max(1, settlement.population || 1)) * 4.5;
+            const militaryBuildings = (settlement.buildings || []).filter(b => b === 'training_ground' || b === 'guardhouse' || b === 'castle' || b === 'dojo').length;
+            const nationBonus = settlement.nationId ? 35 : 0;
+            return popPower + (tier * 45) + (militaryBuildings * 28) + nationBonus + Math.random() * 30;
+        }
+
+        function destroyOtherworldCore(core, currentYear, reason = 'settlement_defense') {
+            if (!core || !core.alive) return;
+            const o = getOtherworldState();
+            core.alive = false;
+
+            Object.keys(o.tiles).forEach(key => {
+                const tState = o.tiles[key];
+                const idx = tState.coreIds.indexOf(core.id);
+                if (idx >= 0) tState.coreIds.splice(idx, 1);
+                if (tState.coreIds.length <= 0) {
+                    const tile = state.worldMap[tState.y] && state.worldMap[tState.y][tState.x];
+                    if (tile) tile.type = tState.originalType;
+                    delete o.tiles[key];
+                }
+            });
+
+            if (reason === 'settlement_defense') {
+                state.history.logs.unshift(`[${currentYear}년] 🛡️ [이계 전선] 정착지 연합군이 이계 중심핵 하나를 파괴했습니다.`);
+            } else {
+                state.history.logs.unshift(`[${currentYear}년] ⚠️ [이계 전선] 이계 중심핵 하나가 붕괴하며 침식 지대가 수축했습니다.`);
+            }
+        }
+
+        function resolveOtherworldSettlementConflicts(currentYear) {
+            const o = getOtherworldState();
+            if (!o.active) return;
+            o.cores.forEach(core => {
+                if (!core.alive) return;
+                const nearby = state.settlements.filter(s => {
+                    if (!s || !s.tiles || s.tiles.length <= 0) return false;
+                    const origin = s.tiles[0];
+                    return Math.abs(origin.x - core.x) + Math.abs(origin.y - core.y) <= (core.radius + o.battleRange);
+                });
+                nearby.forEach(settlement => {
+                    const settlementPower = computeSettlementDefensePower(settlement);
+                    const corePower = 90 + (core.generation * 35) + (core.radius * 18) + Math.random() * 55;
+                    if (settlementPower >= corePower) {
+                        destroyOtherworldCore(core, currentYear, 'settlement_defense');
+                        return;
+                    }
+                    const lossRate = 0.35 + Math.random() * 0.3;
+                    settlement.population = Math.max(0, Math.floor((settlement.population || 0) * (1 - lossRate)));
+                    if (settlement.population <= 0 || Math.random() < 0.22) {
+                        const root = settlement.tiles[0];
+                        if (state.worldMap[root.y] && state.worldMap[root.y][root.x]) {
+                            state.worldMap[root.y][root.x].settlementId = null;
+                        }
+                        settlement.nationId = null;
+                        settlement.type = 'camp';
+                        settlement.buildings = [];
+                        state.history.logs.unshift(`[${currentYear}년] ☠️ [이계 전선] ${settlement.name} 정착지가 이계 침식에 함락되었습니다.`);
+                    } else {
+                        checkSettlementUpgrades(settlement);
+                        state.history.logs.unshift(`[${currentYear}년] ⚔️ [이계 전선] ${settlement.name} 정착지가 이계 군세와 격돌해 큰 피해를 입었습니다.`);
+                    }
+                });
+            });
+        }
+
+        function processOtherworldErosionTurn(currentYear) {
+            const o = getOtherworldState();
+            if (!o.active) return;
+            o.cores.forEach(core => {
+                if (core.alive) expandOtherworldCore(core);
+            });
+            resolveOtherworldSettlementConflicts(currentYear);
+
+            const aliveCores = o.cores.filter(c => c.alive);
+            if (aliveCores.length <= 0) {
+                o.active = false;
+                state.history.logs.unshift(`[${currentYear}년] 🌤️ [이계 전선] 모든 이계 중심핵이 파괴되어 침식이 멈췄습니다.`);
+            }
+        }
+
+        function findNearestSettlementPosition(x, y) {
+            let best = null;
+            let bestDist = Infinity;
+            state.settlements.forEach(s => {
+                if (!s || !s.tiles || s.tiles.length <= 0 || (s.population || 0) <= 0) return;
+                const root = s.tiles[0];
+                const d = Math.abs(root.x - x) + Math.abs(root.y - y);
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = {
+                        settlement: s,
+                        dist: d
+                    };
+                }
+            });
+            return best;
+        }
+
+        function pickThreatSpawnTile() {
+            const candidates = [];
+            for (let y = 0; y < MAP_SIZE; y++) {
+                for (let x = 0; x < MAP_SIZE; x++) {
+                    const tile = state.worldMap[y][x];
+                    if (!tile || tile.settlementId) continue;
+                    if (tile.type === 'deep_water' || tile.type === 'water' || tile.type === 'lake') continue;
+                    candidates.push({
+                        x,
+                        y
+                    });
+                }
+            }
+            if (candidates.length <= 0) return null;
+            return candidates[Math.floor(Math.random() * candidates.length)];
+        }
+
+        function inflictSettlementRaidDamage(settlement, lossFactor = 1) {
+            const rate = Math.min(0.85, Math.max(0.12, lossFactor));
+            settlement.population = Math.max(0, Math.floor((settlement.population || 0) * (1 - rate)));
+            if (Math.random() < 0.35 && settlement.buildings && settlement.buildings.length > 0) {
+                settlement.buildings.splice(Math.floor(Math.random() * settlement.buildings.length), 1);
+            }
+            if (settlement.population <= 0) {
+                settlement.type = 'camp';
+                settlement.nationId = null;
+                settlement.buildings = [];
+            } else {
+                checkSettlementUpgrades(settlement);
+            }
+        }
+
+        function activateDemonLordThreat(currentYear) {
+            const threats = getHistoryThreatState();
+            if (threats.demonLord.active) return;
+            const pos = pickThreatSpawnTile();
+            if (!pos) {
+                state.history.logs.unshift(`[${currentYear}년] 👑 [월드 이벤트] 마왕 강림이 시도되었으나 마왕성이 자리잡을 땅을 찾지 못했습니다.`);
+                return;
+            }
+            threats.demonLord.active = true;
+            threats.demonLord.castle = {
+                x: pos.x,
+                y: pos.y
+            };
+            threats.demonLord.nextSpawnTurn = state.history.currentTurn + threats.demonLord.spawnIntervalTurns;
+            const tile = state.worldMap[pos.y][pos.x];
+            if (tile) tile.type = 'volcano';
+            state.history.logs.unshift(`[${currentYear}년] 👑 [월드 이벤트] 마왕성이 (${pos.x}, ${pos.y})에 강림했습니다.`);
+        }
+
+        function processDemonLordThreatTurn(currentYear) {
+            const threats = getHistoryThreatState();
+            const lord = threats.demonLord;
+            if (!lord.active || !lord.castle) return;
+
+            if (state.history.currentTurn >= lord.nextSpawnTurn) {
+                const band = {
+                    id: `dl_band_${threats.nextBandId++}`,
+                    x: lord.castle.x,
+                    y: lord.castle.y,
+                    power: 120 + Math.random() * 90 + (state.history.currentTurn * 0.08)
+                };
+                lord.bands.push(band);
+                lord.nextSpawnTurn += lord.spawnIntervalTurns;
+                state.history.logs.unshift(`[${currentYear}년] 🩸 [마왕군] 마왕성에서 적대적 무리 #${band.id}가 출진했습니다.`);
+            }
+
+            const survivors = [];
+            lord.bands.forEach(band => {
+                const nearest = findNearestSettlementPosition(band.x, band.y);
+                if (!nearest || !nearest.settlement) return;
+                const target = nearest.settlement;
+                const root = target.tiles[0];
+                if (!root) return;
+                const dx = Math.sign(root.x - band.x);
+                const dy = Math.sign(root.y - band.y);
+                band.x += dx;
+                band.y += dy;
+
+                const arrived = (band.x === root.x && band.y === root.y);
+                if (!arrived) {
+                    survivors.push(band);
+                    return;
+                }
+
+                const defense = computeSettlementDefensePower(target);
+                const attack = band.power + (Math.random() * 45);
+                if (defense >= attack) {
+                    state.history.logs.unshift(`[${currentYear}년] 🛡️ [마왕군] ${target.name}이(가) 침공한 적대적 무리 #${band.id}를 격파했습니다.`);
+                    return;
+                }
+
+                inflictSettlementRaidDamage(target, 0.28 + Math.random() * 0.22);
+                state.history.logs.unshift(`[${currentYear}년] 🔥 [마왕군] ${target.name}이(가) 침공당해 큰 피해를 입었습니다.`);
+            });
+            lord.bands = survivors;
+        }
+
+        function activateDragonThreat(currentYear) {
+            const threats = getHistoryThreatState();
+            if (threats.dragon.active) return;
+            const pos = pickThreatSpawnTile();
+            if (!pos) {
+                state.history.logs.unshift(`[${currentYear}년] 🐉 [월드 이벤트] 드래곤이 둥지를 틀 장소를 찾지 못했습니다.`);
+                return;
+            }
+            threats.dragon.active = true;
+            threats.dragon.nest = {
+                x: pos.x,
+                y: pos.y
+            };
+            threats.dragon.nextRaidTurn = state.history.currentTurn + 2;
+            const tile = state.worldMap[pos.y][pos.x];
+            if (tile) tile.type = 'dragon_peak';
+            state.history.logs.unshift(`[${currentYear}년] 🐉 [월드 이벤트] 드래곤 둥지가 (${pos.x}, ${pos.y})에 형성되었습니다.`);
+        }
+
+        function processDragonThreatTurn(currentYear) {
+            const threats = getHistoryThreatState();
+            const dragon = threats.dragon;
+            if (!dragon.active || !dragon.nest) return;
+            if (state.history.currentTurn < dragon.nextRaidTurn) return;
+
+            const nearest = findNearestSettlementPosition(dragon.nest.x, dragon.nest.y);
+            if (!nearest || !nearest.settlement) {
+                dragon.nextRaidTurn = state.history.currentTurn + dragon.cooldownTurns;
+                return;
+            }
+            const target = nearest.settlement;
+            const defense = computeSettlementDefensePower(target);
+            const dragonPower = 240 + (Math.random() * 100) + (state.history.currentTurn * 0.1);
+
+            if (defense >= dragonPower) {
+                state.history.logs.unshift(`[${currentYear}년] ⚔️ [드래곤의 분노] ${target.name}이(가) 드래곤의 급습을 막아냈습니다. 드래곤은 둥지로 퇴각했습니다.`);
+            } else {
+                inflictSettlementRaidDamage(target, 0.42 + Math.random() * 0.24);
+                state.history.logs.unshift(`[${currentYear}년] 🐲 [드래곤의 분노] 드래곤이 ${target.name}을(를) 습격한 뒤 둥지로 돌아갔습니다.`);
+            }
+
+            dragon.nextRaidTurn = state.history.currentTurn + dragon.cooldownTurns;
+        }
+
+        function processHistoryThreatsTurn(currentYear) {
+            processDemonLordThreatTurn(currentYear);
+            processDragonThreatTurn(currentYear);
+        }
+
+        function hasMajorFigureRole(role) {
+            return getHistoryMajorFigures().some(f => f.role === role);
+        }
+
+        function createHistoryMajorFigure(role, currentYear, sortedNations = [], options = {}) {
+            if (!state.settlements || state.settlements.length <= 0) return null;
+            const npc = options.existingNpc || createRandomNPC();
+            let title = '방랑자';
+            let targetSettlement = options.targetSettlement || null;
+            let homeNationId = options.homeNationId || null;
+            let speed = 2;
+
+            if (role === 'hero') {
+                title = '용사';
+                speed = 3;
+                if (!targetSettlement) targetSettlement = [...state.settlements].sort((a, b) => (b.population || 0) - (a.population || 0))[0] || state.settlements[0];
+            } else if (role === 'saint') {
+                title = '성녀';
+                if (!targetSettlement) targetSettlement = [...state.settlements].sort((a, b) => (a.population || 0) - (b.population || 0))[0] || state.settlements[0];
+            } else if (role === 'emperor') {
+                title = '황제';
+                speed = 1;
+                if (!targetSettlement && homeNationId) {
+                    targetSettlement = state.settlements.filter(s => s.nationId === homeNationId).sort((a, b) => (b.population || 0) - (a.population || 0))[0] || null;
+                }
+                if (!targetSettlement) {
+                    const topNation = sortedNations && sortedNations.length > 0 ? sortedNations[0] : null;
+                    homeNationId = homeNationId || (topNation ? topNation.id : null);
+                    if (homeNationId) {
+                        targetSettlement = state.settlements.filter(s => s.nationId === homeNationId).sort((a, b) => (b.population || 0) - (a.population || 0))[0] || null;
+                    }
+                    if (!targetSettlement) targetSettlement = [...state.settlements].sort((a, b) => (b.population || 0) - (a.population || 0))[0] || state.settlements[0];
+                }
+            } else if (role === 'archmage') {
+                title = '대마도사';
+                speed = 2;
+                if (!targetSettlement) targetSettlement = [...state.settlements].sort((a, b) => (b.culturePoints || 0) - (a.culturePoints || 0))[0] || state.settlements[0];
+            } else if (role === 'grand_marshal') {
+                title = '대원수';
+                speed = 2;
+                if (!targetSettlement) targetSettlement = [...state.settlements].sort((a, b) => (b.population || 0) - (a.population || 0))[0] || state.settlements[0];
+            }
+
+            if (!targetSettlement || !targetSettlement.tiles || targetSettlement.tiles.length <= 0) return null;
+            npc.status = title;
+            if (!String(npc.name || '').startsWith(`${title} `)) npc.name = `${title} ${npc.name}`;
+            npc.location = {
+                x: targetSettlement.tiles[0].x,
+                y: targetSettlement.tiles[0].y
+            };
+
+            const figure = {
+                npcId: npc.id,
+                role,
+                title,
+                homeNationId,
+                location: {
+                    x: npc.location.x,
+                    y: npc.location.y
+                },
+                destinationSettlementId: targetSettlement.id,
+                speed
+            };
+            if (role === 'hero') {
+                figure.companionNpcIds = [];
+                figure.recruitmentResolved = false;
+                figure.recruitAttemptedNpcIds = [];
+            }
+            getHistoryMajorFigures().push(figure);
+            state.history.logs.unshift(`[${currentYear}년] 🏛️ [주요 인물] ${npc.name}이(가) 역사 무대에 등장했습니다.`);
+            return figure;
+        }
+
+        function getNationSnapshotMap(sortedNations = [], tileCounts = {}) {
+            const map = {};
+            sortedNations.forEach(n => {
+                const settlements = state.settlements.filter(s => s.nationId === n.id);
+                const pop = settlements.reduce((sum, s) => sum + (s.population || 0), 0);
+                const territory = tileCounts[n.id] || 0;
+                const power = (territory * 1.4) + (settlements.length * 95) + (pop * 0.18);
+                map[n.id] = {
+                    nation: n,
+                    territory,
+                    settlementCount: settlements.length,
+                    population: pop,
+                    power,
+                    settlements
+                };
+            });
+            return map;
+        }
+
+        function maybeSpawnSaint(currentYear, sortedNations = []) {
+            if (hasMajorFigureRole('saint')) return;
+            if (!state.settlements || state.settlements.length < 3) return;
+            const distressed = state.settlements.filter(s => (s.population || 0) < 130 || ((s.foodProduction || 0) < (s.foodConsumption || 0)));
+            if (distressed.length < Math.max(3, Math.floor(state.settlements.length * 0.25))) return;
+            const target = distressed.sort((a, b) => (a.population || 0) - (b.population || 0))[0];
+            createHistoryMajorFigure('saint', currentYear, sortedNations, {
+                targetSettlement: target
+            });
+        }
+
+        function maybePromoteEmperor(currentYear, sortedNations = [], nationSnapshotMap = {}) {
+            if (hasMajorFigureRole('emperor')) return;
+            const candidates = Object.values(nationSnapshotMap).filter(s => s.territory >= 240 && s.settlementCount >= 3 && s.power >= 850);
+            if (candidates.length <= 0) return;
+            const chosen = candidates.sort((a, b) => b.power - a.power)[0];
+            const nation = chosen.nation;
+            if (!nation) return;
+            nation.name = nation.name.includes('제국') ? nation.name : `${nation.name} 제국`;
+
+            let ruler = getLeaderEntity(nation.rulerId);
+            if (!ruler) {
+                ruler = createRandomNPC();
+                nation.rulerId = ruler.id;
+            }
+            ruler.status = '황제';
+            const target = chosen.settlements.sort((a, b) => (b.population || 0) - (a.population || 0))[0] || state.settlements[0];
+            createHistoryMajorFigure('emperor', currentYear, sortedNations, {
+                existingNpc: ruler,
+                homeNationId: nation.id,
+                targetSettlement: target
+            });
+            state.history.logs.unshift(`[${currentYear}년] 👑 [제국 승격] ${nation.name}이(가) 제국으로 승격하고 ${ruler.name}이(가) 황제로 추대되었습니다.`);
+        }
+
+        function maybeSpawnAdditionalImportantFigures(currentYear, sortedNations = []) {
+            const totalCulture = state.settlements.reduce((sum, s) => sum + (s.culturePoints || 0), 0);
+            const topNation = sortedNations[0];
+            const secondNation = sortedNations[1];
+            const topGap = (topNation && secondNation) ? Math.abs((topNation.count || 0) - (secondNation.count || 0)) : 9999;
+
+            if (!hasMajorFigureRole('archmage') && state.settlements.length >= 5 && totalCulture >= 420) {
+                createHistoryMajorFigure('archmage', currentYear, sortedNations);
+            }
+            if (!hasMajorFigureRole('grand_marshal') && topNation && secondNation && (secondNation.count || 0) >= 85 && topGap <= 110) {
+                createHistoryMajorFigure('grand_marshal', currentYear, sortedNations);
+            }
+        }
+
+        function evaluateConditionalMajorFigureSpawns(currentYear, sortedNations = [], tileCounts = {}) {
+            const nationSnapshotMap = getNationSnapshotMap(sortedNations, tileCounts);
+            maybeSpawnSaint(currentYear, sortedNations);
+            maybePromoteEmperor(currentYear, sortedNations, nationSnapshotMap);
+            maybeSpawnAdditionalImportantFigures(currentYear, sortedNations);
+        }
+
+        function findNearestFigureForRecruitment(heroFigure) {
+            const others = getHistoryMajorFigures().filter(f => f.npcId !== heroFigure.npcId && !heroFigure.recruitAttemptedNpcIds.includes(f.npcId));
+            if (others.length <= 0) return null;
+            let best = null;
+            let bestDist = Infinity;
+            others.forEach(f => {
+                const dist = Math.abs((f.location?.x || 0) - heroFigure.location.x) + Math.abs((f.location?.y || 0) - heroFigure.location.y);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = f;
+                }
+            });
+            return best;
+        }
+
+        function attemptHeroRecruitment(heroFigure, candidateFigure, currentYear) {
+            if (!heroFigure || !candidateFigure) return false;
+            const heroNpc = state.npcs.find(n => n.id === heroFigure.npcId);
+            const candNpc = state.npcs.find(n => n.id === candidateFigure.npcId);
+            if (!heroNpc || !candNpc) return false;
+
+            const affinity = getSexCompatibility(heroNpc, candNpc);
+            let baseChance = 0.35;
+            if (candidateFigure.role === 'saint') baseChance = 0.58;
+            else if (candidateFigure.role === 'archmage') baseChance = 0.66;
+            else if (candidateFigure.role === 'grand_marshal') baseChance = 0.72;
+            else if (candidateFigure.role === 'emperor') baseChance = 0.26;
+            const chance = Math.max(0.05, Math.min(0.95, baseChance + ((affinity - 50) / 250)));
+
+            const joined = Math.random() < chance;
+            heroFigure.recruitAttemptedNpcIds.push(candidateFigure.npcId);
+            if (joined) {
+                if (!heroFigure.companionNpcIds.includes(candidateFigure.npcId)) heroFigure.companionNpcIds.push(candidateFigure.npcId);
+                state.history.logs.unshift(`[${currentYear}년] 🤝 [용사단] ${candNpc.name}이(가) 용사단에 합류했습니다. (상성 ${affinity})`);
+            } else {
+                state.history.logs.unshift(`[${currentYear}년] 🚪 [용사단] ${candNpc.name}이(가) 제안을 거절했습니다. (상성 ${affinity})`);
+            }
+            return joined;
+        }
+
+        function chooseDestinationForFigure(figure, sortedNations = []) {
+            if (!state.settlements || state.settlements.length <= 0) return null;
+            if (figure.role === 'hero') {
+                if (!figure.recruitmentResolved) {
+                    const recruitTarget = findNearestFigureForRecruitment(figure);
+                    if (recruitTarget) {
+                        const near = findNearestSettlementPosition(recruitTarget.location.x, recruitTarget.location.y);
+                        if (near && near.settlement) return near.settlement;
+                    } else {
+                        figure.recruitmentResolved = true;
+                    }
+                }
+                const o = getOtherworldState();
+                if (o.active) {
+                    const aliveCore = o.cores.find(c => c.alive);
+                    if (aliveCore) {
+                        const nearest = findNearestSettlementPosition(aliveCore.x, aliveCore.y);
+                        if (nearest && nearest.settlement) return nearest.settlement;
+                    }
+                }
+                const t = getHistoryThreatState();
+                if (t.demonLord.active && t.demonLord.castle) {
+                    const nearCastle = findNearestSettlementPosition(t.demonLord.castle.x, t.demonLord.castle.y);
+                    if (nearCastle && nearCastle.settlement) return nearCastle.settlement;
+                }
+                if (t.dragon.active && t.dragon.nest) {
+                    const nearNest = findNearestSettlementPosition(t.dragon.nest.x, t.dragon.nest.y);
+                    if (nearNest && nearNest.settlement) return nearNest.settlement;
+                }
+                return [...state.settlements].sort((a, b) => (b.population || 0) - (a.population || 0))[0] || state.settlements[0];
+            }
+
+            if (figure.role === 'saint') {
+                return [...state.settlements].sort((a, b) => (a.population || 0) - (b.population || 0))[0] || state.settlements[0];
+            }
+
+            if (figure.role === 'archmage') {
+                const o = getOtherworldState();
+                if (o.active) {
+                    const core = o.cores.find(c => c.alive);
+                    if (core) {
+                        const nearCore = findNearestSettlementPosition(core.x, core.y);
+                        if (nearCore && nearCore.settlement) return nearCore.settlement;
+                    }
+                }
+                return [...state.settlements].sort((a, b) => (b.culturePoints || 0) - (a.culturePoints || 0))[0] || state.settlements[0];
+            }
+
+            if (figure.role === 'grand_marshal') {
+                const t = getHistoryThreatState();
+                if (t.demonLord.active && t.demonLord.castle) {
+                    const nearCastle = findNearestSettlementPosition(t.demonLord.castle.x, t.demonLord.castle.y);
+                    if (nearCastle && nearCastle.settlement) return nearCastle.settlement;
+                }
+                return [...state.settlements].sort((a, b) => (b.population || 0) - (a.population || 0))[0] || state.settlements[0];
+            }
+
+            if (figure.role === 'emperor') {
+                if (figure.homeNationId) {
+                    const nationalCapital = state.settlements.filter(s => s.nationId === figure.homeNationId).sort((a, b) => (b.population || 0) - (a.population || 0))[0];
+                    if (nationalCapital) return nationalCapital;
+                }
+                const topNation = sortedNations && sortedNations.length > 0 ? sortedNations[0] : null;
+                if (topNation) {
+                    const topNationSettlement = state.settlements.filter(s => s.nationId === topNation.id).sort((a, b) => (b.population || 0) - (a.population || 0))[0];
+                    if (topNationSettlement) {
+                        figure.homeNationId = topNation.id;
+                        return topNationSettlement;
+                    }
+                }
+                return [...state.settlements].sort((a, b) => (b.population || 0) - (a.population || 0))[0] || state.settlements[0];
+            }
+
+            return state.settlements[Math.floor(Math.random() * state.settlements.length)];
+        }
+
+        function moveFigureToward(figure, destinationSettlement) {
+            if (!destinationSettlement || !destinationSettlement.tiles || destinationSettlement.tiles.length <= 0) return false;
+            const target = destinationSettlement.tiles[0];
+            for (let i = 0; i < figure.speed; i++) {
+                const dx = target.x - figure.location.x;
+                const dy = target.y - figure.location.y;
+                if (dx === 0 && dy === 0) break;
+                if (Math.abs(dx) >= Math.abs(dy)) figure.location.x += Math.sign(dx);
+                else figure.location.y += Math.sign(dy);
+            }
+            const npc = state.npcs.find(n => n.id === figure.npcId);
+            if (npc) npc.location = {
+                x: figure.location.x,
+                y: figure.location.y
+            };
+            return figure.location.x === target.x && figure.location.y === target.y;
+        }
+
+        function applyMajorFigureArrivalEffects(figure, destinationSettlement, currentYear) {
+            if (!destinationSettlement) return;
+            if (figure.role === 'hero') {
+                if (!figure.recruitmentResolved) {
+                    const recruitCandidate = getHistoryMajorFigures().find(f => {
+                        if (f.npcId === figure.npcId) return false;
+                        if (figure.recruitAttemptedNpcIds.includes(f.npcId)) return false;
+                        const dist = Math.abs((f.location?.x || 0) - figure.location.x) + Math.abs((f.location?.y || 0) - figure.location.y);
+                        return dist <= 2;
+                    });
+                    if (recruitCandidate) {
+                        attemptHeroRecruitment(figure, recruitCandidate, currentYear);
+                        return;
+                    }
+                    if (!findNearestFigureForRecruitment(figure)) {
+                        figure.recruitmentResolved = true;
+                        state.history.logs.unshift(`[${currentYear}년] 🛡️ [용사단] 모집을 마친 용사단이 위협 전선으로 출정합니다.`);
+                    }
+                }
+
+                const companionBonus = (figure.companionNpcIds?.length || 0) * 0.12;
+                const o = getOtherworldState();
+                const core = o.cores.find(c => c.alive && Math.abs(c.x - figure.location.x) + Math.abs(c.y - figure.location.y) <= 3);
+                if (core) {
+                    if (Math.random() < (0.45 + companionBonus)) {
+                        destroyOtherworldCore(core, currentYear, 'settlement_defense');
+                        state.history.logs.unshift(`[${currentYear}년] ⚔️ [용사단] 용사단이 전선을 돌파해 이계 중심핵을 파괴했습니다.`);
+                    } else {
+                        state.history.logs.unshift(`[${currentYear}년] ⚔️ [용사단] 이계 핵 공략에 실패했지만 전선을 유지했습니다.`);
+                    }
+                    return;
+                }
+                const t = getHistoryThreatState();
+                if (t.demonLord.bands.length > 0) {
+                    const kills = Math.max(1, Math.min(t.demonLord.bands.length, 1 + Math.floor((figure.companionNpcIds?.length || 0) / 2)));
+                    t.demonLord.bands.splice(0, kills);
+                    state.history.logs.unshift(`[${currentYear}년] ⚔️ [용사단] 용사단이 마왕군 ${kills}개 부대를 격퇴했습니다.`);
+                    return;
+                }
+                if (t.dragon.active) {
+                    t.dragon.nextRaidTurn += Math.floor(t.dragon.cooldownTurns * (0.5 + companionBonus));
+                    state.history.logs.unshift(`[${currentYear}년] 🛡️ [용사단] 용사단의 교란으로 드래곤의 공세가 지연되었습니다.`);
+                }
+                return;
+            }
+
+            if (figure.role === 'saint') {
+                const heal = Math.max(6, Math.floor((destinationSettlement.population || 0) * (0.08 + Math.random() * 0.07)));
+                destinationSettlement.population += heal;
+                destinationSettlement.culturePoints = (destinationSettlement.culturePoints || 0) + 40;
+                checkSettlementUpgrades(destinationSettlement);
+                state.history.logs.unshift(`[${currentYear}년] ✨ [주요 인물] 성녀가 ${destinationSettlement.name}의 민심을 수습해 인구가 ${heal} 증가했습니다.`);
+                return;
+            }
+
+            if (figure.role === 'emperor') {
+                const boostTargets = state.settlements.filter(s => {
+                    if (!figure.homeNationId) return false;
+                    return s.nationId === figure.homeNationId;
+                });
+                const targets = boostTargets.length > 0 ? boostTargets : [destinationSettlement];
+                targets.forEach(s => {
+                    s.population += Math.max(4, Math.floor((s.population || 0) * 0.04));
+                    s.culturePoints = (s.culturePoints || 0) + 20;
+                    checkSettlementUpgrades(s);
+                });
+                state.history.logs.unshift(`[${currentYear}년] 👑 [주요 인물] 제국의 왕이 내정을 정비해 핵심 정착지들이 안정되었습니다.`);
+                return;
+            }
+
+            if (figure.role === 'archmage') {
+                const o = getOtherworldState();
+                const core = o.cores.find(c => c.alive && Math.abs(c.x - figure.location.x) + Math.abs(c.y - figure.location.y) <= 4);
+                if (core && Math.random() < 0.55) {
+                    destroyOtherworldCore(core, currentYear, 'settlement_defense');
+                    state.history.logs.unshift(`[${currentYear}년] 🔮 [주요 인물] 대마도사가 봉인술로 이계 핵 하나를 무력화했습니다.`);
+                } else {
+                    destinationSettlement.culturePoints = (destinationSettlement.culturePoints || 0) + 60;
+                    state.history.logs.unshift(`[${currentYear}년] 🔮 [주요 인물] 대마도사가 결계를 강화해 침식 확산을 지연시켰습니다.`);
+                }
+                return;
+            }
+
+            if (figure.role === 'grand_marshal') {
+                const t = getHistoryThreatState();
+                if (t.demonLord.bands.length > 0) {
+                    t.demonLord.bands.shift();
+                    state.history.logs.unshift(`[${currentYear}년] 🪖 [주요 인물] 대원수가 마왕군 부대를 요격했습니다.`);
+                } else {
+                    destinationSettlement.population += Math.max(4, Math.floor((destinationSettlement.population || 0) * 0.03));
+                    state.history.logs.unshift(`[${currentYear}년] 🪖 [주요 인물] 대원수가 방위선을 재정비해 ${destinationSettlement.name}의 방어가 강화되었습니다.`);
+                }
+            }
+        }
+
+        function processHistoryMajorFiguresTurn(currentYear, sortedNations = []) {
+            const figures = getHistoryMajorFigures();
+            figures.forEach(figure => {
+                const destination = chooseDestinationForFigure(figure, sortedNations);
+                if (!destination) return;
+                figure.destinationSettlementId = destination.id;
+                const arrived = moveFigureToward(figure, destination);
+                if (arrived) applyMajorFigureArrivalEffects(figure, destination, currentYear);
+            });
+        }
+
         function generateHistoryWorldEventChoices() {
+            const threats = getHistoryThreatState();
+            const otherworld = getOtherworldState();
+            const heroChoiceAvailable = otherworld.active && threats.demonLord.active && threats.dragon.active && !hasMajorFigureRole('hero');
+
             const pool = [{
                     id: 'golden_age',
                     title: '황금기 선포',
                     icon: '🌞',
                     desc: '모든 정착지 인구가 크게 성장하고 문화가 꽃핍니다.',
-                    color: 'amber'
+                    color: 'amber',
+                    rarity: 'common',
+                    weight: 24
                 },
                 {
                     id: 'frontier_rush',
                     title: '개척 대행진',
                     icon: '🧭',
                     desc: '새로운 정착지가 빠르게 늘어나고 변방이 확장됩니다.',
-                    color: 'emerald'
+                    color: 'emerald',
+                    rarity: 'common',
+                    weight: 22
                 },
                 {
                     id: 'iron_march',
                     title: '강철 행군',
                     icon: '⚔️',
                     desc: '국가 간 경쟁이 격화되어 군사적 긴장이 높아집니다.',
-                    color: 'rose'
+                    color: 'rose',
+                    rarity: 'common',
+                    weight: 20
                 },
                 {
                     id: 'sage_conclave',
                     title: '현자의 회합',
                     icon: '📚',
                     desc: '지도자와 인재가 늘어나 국가 운영이 안정됩니다.',
-                    color: 'indigo'
+                    color: 'indigo',
+                    rarity: 'rare',
+                    weight: 13
                 },
                 {
                     id: 'mana_bloom',
                     title: '마나 개화',
                     icon: '✨',
                     desc: '자연과 신비가 활성화되어 숲과 비옥한 땅이 늘어납니다.',
-                    color: 'violet'
+                    color: 'violet',
+                    rarity: 'rare',
+                    weight: 11
+                },
+                {
+                    id: 'demon_lord_descends',
+                    title: '마왕 강림',
+                    icon: '👑',
+                    desc: '대륙 전역에 어둠의 군세가 출몰하고 문명권이 흔들립니다.',
+                    color: 'fuchsia',
+                    rarity: 'epic',
+                    weight: 6
+                },
+                {
+                    id: 'dragon_wrath',
+                    title: '드래곤의 분노',
+                    icon: '🐉',
+                    desc: '용의 습격으로 주요 정착지가 파괴되고 생존 경쟁이 시작됩니다.',
+                    color: 'red',
+                    rarity: 'epic',
+                    weight: 5
+                },
+                {
+                    id: 'otherworldly_erosion',
+                    title: '이계 침식',
+                    icon: '🌀',
+                    desc: '균열이 열리며 대지가 변이하고 마나 폭주가 발생합니다.',
+                    color: 'purple',
+                    rarity: 'legendary',
+                    weight: 3
                 }
             ];
-            const shuffled = [...pool].sort(() => Math.random() - 0.5);
-            return shuffled.slice(0, 3);
+            if (heroChoiceAvailable) {
+                pool.push({
+                    id: 'hero_appears',
+                    title: '용사 출현',
+                    icon: '🗡️',
+                    desc: '삼중 재앙 앞에 맞설 용사가 나타나 전선에 개입합니다.',
+                    color: 'sky',
+                    rarity: 'rare',
+                    weight: 9
+                });
+            }
+            const candidates = [...pool];
+            const picks = [];
+            while (candidates.length > 0 && picks.length < 3) {
+                const totalWeight = candidates.reduce((sum, item) => sum + (item.weight || 1), 0);
+                let roll = Math.random() * totalWeight;
+                let chosenIndex = 0;
+                for (let i = 0; i < candidates.length; i++) {
+                    roll -= (candidates[i].weight || 1);
+                    if (roll <= 0) {
+                        chosenIndex = i;
+                        break;
+                    }
+                }
+                picks.push(candidates.splice(chosenIndex, 1)[0]);
+            }
+            return picks;
         }
 
         function applyHistoryWorldEventChoice(choiceId) {
@@ -3036,7 +3871,97 @@
                     }
                 }
                 state.history.logs.unshift(`[${currentYear}년] ✨ [월드 이벤트] 마나 개화로 대륙 곳곳의 대지가 신비로운 기운을 머금었습니다.`);
+            } else if (choiceId === 'demon_lord_descends') {
+                activateDemonLordThreat(currentYear);
+                state.history.logs.unshift(`[${currentYear}년] 👑 [월드 이벤트] 마왕성이 세워지고 주기적으로 적대적 무리가 출병하기 시작했습니다.`);
+            } else if (choiceId === 'dragon_wrath') {
+                activateDragonThreat(currentYear);
+                state.history.logs.unshift(`[${currentYear}년] 🐉 [월드 이벤트] 드래곤이 둥지를 틀고 가장 가까운 정착지를 반복 습격하기 시작했습니다.`);
+            } else if (choiceId === 'otherworldly_erosion') {
+                activateOtherworldErosion(currentYear);
+                state.history.logs.unshift(`[${currentYear}년] 🌀 [월드 이벤트] 이계 중심핵이 출현해 턴마다 침식이 확산되기 시작했습니다.`);
+            } else if (choiceId === 'hero_appears') {
+                if (!hasMajorFigureRole('hero')) {
+                    createHistoryMajorFigure('hero', currentYear);
+                    state.history.logs.unshift(`[${currentYear}년] 🗡️ [월드 이벤트] 삼중 재앙에 맞서 용사가 공식적으로 전선에 합류했습니다.`);
+                } else {
+                    state.history.logs.unshift(`[${currentYear}년] 🗡️ [월드 이벤트] 용사는 이미 전선에서 활약 중입니다.`);
+                }
             }
+        }
+
+        function pickHistoryChronicleEvent(sortedNations, topNation, secondNation, startYear, endYear) {
+            const events = [{
+                    id: 'dark_age',
+                    weight: (topNation && topNation.count === 0) ? 35 : 0,
+                    log: `[${startYear}~${endYear}년] 대륙 전역이 야만족과 마물들에 의해 짓밟혀 암흑기가 도래했습니다.`
+                },
+                {
+                    id: 'territory_war',
+                    weight: (secondNation && secondNation.count > 100) ? 24 : 8,
+                    log: topNation && secondNation ? `[${startYear}~${endYear}년] <strong>${topNation.name}</strong>과(와) <strong>${secondNation.name}</strong> 간의 처절한 영토 전쟁이 대륙을 피로 물들였습니다.` : `[${startYear}~${endYear}년] 군벌과 제후들이 난립하며 대륙의 국경이 끊임없이 요동쳤습니다.`
+                },
+                {
+                    id: 'imperial_expansion',
+                    weight: topNation ? 20 : 10,
+                    log: topNation ? `[${startYear}~${endYear}년] <strong>${topNation.name}</strong>이(가) 급격히 영토를 넓히며 대륙의 황금기를 주도했습니다.` : `[${startYear}~${endYear}년] 강력한 중심 세력이 부재한 가운데 소국들의 흥망이 반복되었습니다.`
+                },
+                {
+                    id: 'famine',
+                    weight: 9,
+                    settlementModifiers: {
+                        foodMultiplier: 0.5,
+                        popLossRate: 0.06
+                    },
+                    log: `[${startYear}~${endYear}년] 대흉년이 들며 수확량이 반토막 나고 굶주림이 확산되었습니다.`
+                },
+                {
+                    id: 'plague',
+                    weight: 8,
+                    settlementModifiers: {
+                        foodMultiplier: 0.85,
+                        popLossRate: 0.12
+                    },
+                    log: `[${startYear}~${endYear}년] 치명적인 역병이 퍼져 도시와 촌락의 인구가 급감했습니다.`
+                },
+                {
+                    id: 'drought',
+                    weight: 7,
+                    settlementModifiers: {
+                        foodMultiplier: 0.6,
+                        popLossRate: 0.03
+                    },
+                    log: `[${startYear}~${endYear}년] 장기 가뭄이 이어지며 농경지와 수자원이 큰 타격을 입었습니다.`
+                },
+                {
+                    id: 'renaissance',
+                    weight: 10,
+                    log: `[${startYear}~${endYear}년] 학문과 예술이 번성하는 르네상스가 도래해 문화적 전성기가 열렸습니다.`
+                },
+                {
+                    id: 'trade_boom',
+                    weight: 12,
+                    log: `[${startYear}~${endYear}년] 대상단과 항로 개척이 활발해지며 각국의 무역과 부가 빠르게 성장했습니다.`
+                },
+                {
+                    id: 'genius_birth',
+                    weight: 10,
+                    log: (() => {
+                        let randomNation = sortedNations[Math.floor(Math.random() * Math.min(3, sortedNations.length))];
+                        if (randomNation && randomNation.count > 0) return `[${startYear}~${endYear}년] <strong>${randomNation.name}</strong>에서 세기의 천재가 탄생하여 역사에 거대한 족적을 남겼습니다.`;
+                        return `[${startYear}~${endYear}년] 잊혀진 부족들의 잔당이 끊임없이 국경을 어지럽혔습니다.`;
+                    })()
+                }
+            ];
+
+            const candidates = events.filter(e => (e.weight || 0) > 0);
+            const totalWeight = candidates.reduce((sum, item) => sum + item.weight, 0);
+            let roll = Math.random() * totalWeight;
+            for (let i = 0; i < candidates.length; i++) {
+                roll -= candidates[i].weight;
+                if (roll <= 0) return candidates[i];
+            }
+            return candidates[candidates.length - 1];
         }
 
         function finalizeHistorySimulation() {
@@ -3080,10 +4005,6 @@
             if (!state.history.isRunning || state.history.isFinished || state.history.isPaused || state.history.isPausedForEvent) return;
             const chunk = 10;
             const currentYear = state.gameDate.year + state.history.currentTurn;
-            const disaster = processHistorySettlements(chunk);
-            updateSettlementInfluences();
-            updateNationBordersFromInfluence();
-
             let tileCounts = {};
             state.history.nations.forEach(n => tileCounts[n.id] = 0);
             state.worldMap.forEach(row => row.forEach(t => {
@@ -3095,22 +4016,19 @@
             })).sort((a, b) => b.count - a.count);
             let topNation = sortedNations[0];
             let secondNation = sortedNations[1];
-            let eventRoll = Math.random();
-            let logMsg = "";
             let startYear = currentYear,
                 endYear = currentYear + chunk - 1;
+            const chronicleEvent = pickHistoryChronicleEvent(sortedNations, topNation, secondNation, startYear, endYear);
 
-            if (topNation && topNation.count === 0) logMsg = `[${startYear}~${endYear}년] 대륙 전역이 야만족과 마물들에 의해 짓밟혀 암흑기가 도래했습니다.`;
-            else if (eventRoll < 0.35 && secondNation && secondNation.count > 100) logMsg = `[${startYear}~${endYear}년] <strong>${topNation.name}</strong>과(와) <strong>${secondNation.name}</strong> 간의 처절한 영토 전쟁이 대륙을 피로 물들였습니다.`;
-            else if (eventRoll < 0.6 && topNation) logMsg = `[${startYear}~${endYear}년] <strong>${topNation.name}</strong>이(가) 급격히 영토를 넓히며 대륙의 황금기를 주도했습니다.`;
-            else if (eventRoll < 0.8) logMsg = `[${startYear}~${endYear}년] 혹독한 전염병과 기근이 발생하여 각 국가들의 국력이 크게 쇠퇴했습니다.`;
-            else {
-                let randomNation = sortedNations[Math.floor(Math.random() * Math.min(3, sortedNations.length))];
-                if (randomNation && randomNation.count > 0) logMsg = `[${startYear}~${endYear}년] <strong>${randomNation.name}</strong>에서 세기의 천재가 탄생하여 역사에 거대한 족적을 남겼습니다.`;
-                else logMsg = `[${startYear}~${endYear}년] 잊혀진 부족들의 잔당이 끊임없이 국경을 어지럽혔습니다.`;
-            }
+            processHistorySettlements(chunk, chronicleEvent.settlementModifiers || null);
+            processOtherworldErosionTurn(endYear);
+            processHistoryThreatsTurn(endYear);
+            evaluateConditionalMajorFigureSpawns(endYear, sortedNations, tileCounts);
+            processHistoryMajorFiguresTurn(endYear, sortedNations);
+            updateSettlementInfluences();
+            updateNationBordersFromInfluence();
 
-            if (disaster) state.history.logs.unshift('[' + startYear + '~' + endYear + '] ' + disaster.log);
+            const logMsg = chronicleEvent.log;
             state.history.logs.unshift(logMsg);
             if (typeof showToast === 'function') {
                 const toastMsg = String(logMsg).replace(/<[^>]*>/g, '');
