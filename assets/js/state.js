@@ -179,8 +179,8 @@
                 intervalId: null,
                 isRunning: false,
                 isFinished: false,
+                isPaused: false,
                 isPausedForEvent: false,
-                nextWorldEventTurn: 100,
                 pendingWorldEventChoices: []
             },
             selectedTileInfo: null,

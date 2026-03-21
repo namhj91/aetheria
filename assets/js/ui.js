@@ -420,6 +420,8 @@ function renderDungeonExplore() {
 
         function showToast(message, isAdult = false, options = {}) {
             const variant = options.variant || 'default';
+            const durationMs = options.durationMs ?? 2500;
+            const fadeOutMs = options.fadeOutMs ?? 800;
             const toast = document.createElement('div');
             if (variant === 'history-log') {
                 toast.className = 'fixed top-6 left-0 right-0 w-full px-4 py-1 text-center font-bold text-base md:text-lg text-slate-100 z-50 animate-fade-in pointer-events-none';
@@ -431,8 +433,8 @@ function renderDungeonExplore() {
             document.body.appendChild(toast);
             setTimeout(() => {
                 toast.classList.replace('animate-fade-in', 'animate-fade-out');
-                setTimeout(() => toast.remove(), 800);
-            }, 2500);
+                setTimeout(() => toast.remove(), fadeOutMs);
+            }, durationMs);
         }
 
         function getTierStyles(tier, isDictionary = false) {
@@ -1272,7 +1274,7 @@ function renderDungeonExplore() {
         }
 
         function renderHistoryLayout() {
-            appEl.innerHTML = `<div class="min-h-screen flex flex-col bg-slate-900 animate-fade-in h-screen overflow-hidden"><div class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center shadow-md z-20 shrink-0"><div><h2 class="text-xl font-bold text-white tracking-widest font-fantasy">역사 시뮬레이션</h2><p class="text-xs text-slate-400 mt-1">10년 단위로 진행되며, 100년마다 월드 이벤트를 선택합니다.</p></div><div class="flex items-center space-x-2 md:space-x-4"><div class="text-blue-400 font-bold" id="ui-history-progress">진행 중: 0년</div><button id="btn-history-log" class="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors">로그 보기</button><button id="btn-history-end" class="px-4 py-1.5 bg-rose-700 hover:bg-rose-600 text-white text-sm rounded transition-colors">시뮬 종료</button><button id="btn-enter-origin" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded shadow-[0_0_10px_rgba(37,99,235,0.5)] transition-all hidden">태생 선택</button></div></div><div class="flex flex-1 overflow-hidden"><div id="map-wrapper" class="w-full relative overflow-auto bg-black map-container"><div class="relative inline-block leading-none"><canvas id="world-canvas" class="block"></canvas><canvas id="player-canvas" class="absolute top-0 left-0 pointer-events-none"></canvas></div><div id="history-world-event-overlay" class="fixed inset-0 w-screen bg-black/70 backdrop-blur-sm hidden items-center justify-center z-20 p-4 md:p-6"></div></div></div><div id="history-log-modal" class="fixed inset-0 bg-black/80 z-[250] hidden items-center justify-center p-4"><div class="w-full max-w-5xl h-[85vh] bg-slate-900 border border-slate-600 rounded-2xl shadow-2xl flex flex-col"><div class="p-4 border-b border-slate-700 flex items-center justify-between"><h3 class="text-2xl font-black text-white font-fantasy">연대기 로그</h3><button id="btn-close-history-log" class="text-slate-300 hover:text-white text-xl">&times;</button></div><div id="history-log-modal-content" class="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll"></div></div></div></div>`;
+            appEl.innerHTML = `<div class="min-h-screen flex flex-col bg-slate-900 animate-fade-in h-screen overflow-hidden"><div class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center shadow-md z-20 shrink-0"><div><h2 class="text-xl font-bold text-white tracking-widest font-fantasy">역사 시뮬레이션</h2><p class="text-xs text-slate-400 mt-1">10년 단위로 진행되며, 필요할 때 일시정지 상태에서 월드 이벤트를 선택할 수 있습니다.</p></div><div class="flex items-center space-x-2 md:space-x-4"><div class="text-blue-400 font-bold" id="ui-history-progress">진행 중: 0년</div><button id="btn-history-pause" class="px-4 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-sm rounded transition-colors">일시정지</button><button id="btn-history-event" class="px-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-sm rounded transition-colors">월드 이벤트</button><button id="btn-history-log" class="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors">로그 보기</button><button id="btn-history-end" class="px-4 py-1.5 bg-rose-700 hover:bg-rose-600 text-white text-sm rounded transition-colors">시뮬 종료</button><button id="btn-enter-origin" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded shadow-[0_0_10px_rgba(37,99,235,0.5)] transition-all hidden">태생 선택</button></div></div><div class="flex flex-1 overflow-hidden"><div id="map-wrapper" class="w-full relative overflow-auto bg-black map-container"><div class="relative inline-block leading-none"><canvas id="world-canvas" class="block"></canvas><canvas id="player-canvas" class="absolute top-0 left-0 pointer-events-none"></canvas></div><div id="history-world-event-overlay" class="fixed inset-0 w-screen bg-black/70 backdrop-blur-sm hidden items-center justify-center z-20 p-4 md:p-6"></div></div></div><div id="history-log-modal" class="fixed inset-0 bg-black/80 z-[250] hidden items-center justify-center p-4"><div class="w-full max-w-5xl h-[85vh] bg-slate-900 border border-slate-600 rounded-2xl shadow-2xl flex flex-col"><div class="p-4 border-b border-slate-700 flex items-center justify-between"><h3 class="text-2xl font-black text-white font-fantasy">연대기 로그</h3><button id="btn-close-history-log" class="text-slate-300 hover:text-white text-xl">&times;</button></div><div id="history-log-modal-content" class="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll"></div></div></div></div>`;
             renderHistoryUI();
         }
 
@@ -1323,7 +1325,7 @@ function renderDungeonExplore() {
                 const borderClass = colorClassMap[choice.color] || 'border-slate-600';
                 return `<button class="card-fan-card ${borderClass}" data-history-event-index="${index}"><div class="card-fan-card-spin"><div class="card-fan-card-inner"><div class="card-fan-card-face card-fan-front"><div class="card-fan-icon">${choice.icon}</div><div class="card-fan-title">${choice.title}</div><div class="card-fan-desc">${choice.desc}</div></div><div class="card-fan-card-face card-fan-back"><div class="card-fan-back-sigil">✦</div>FATE</div></div></div></button>`;
             }).join('');
-            overlay.innerHTML = `<div class="w-full max-w-none mx-auto"><div class="text-center mb-8"><h3 class="text-3xl font-black text-white tracking-wider font-fantasy">월드 이벤트 선택</h3><p class="text-slate-300 mt-2">100년의 갈림길입니다. 다음 시대를 이끌 운명을 고르세요.</p></div><div class="card-fan-wrap center w-full"><div id="history-world-event-fan" class="card-fan">${cardsHtml}</div></div></div>`;
+            overlay.innerHTML = `<div class="w-full max-w-none mx-auto"><div class="text-center mb-8"><h3 class="text-3xl font-black text-white tracking-wider font-fantasy">월드 이벤트 선택</h3><p class="text-slate-300 mt-2">정지된 시간 속에서, 다음 시대를 이끌 운명을 고르세요.</p></div><div class="card-fan-wrap center w-full"><div id="history-world-event-fan" class="card-fan">${cardsHtml}</div></div></div>`;
             overlay.classList.remove('hidden');
             overlay.classList.add('flex');
             initCardFan('history-world-event-fan', {
@@ -1350,6 +1352,14 @@ function renderDungeonExplore() {
         function renderHistoryUI() {
             const progEl = document.getElementById('ui-history-progress');
             if (progEl) progEl.innerText = `진행 중: ${state.history.currentTurn}년`;
+            const pauseBtn = document.getElementById('btn-history-pause');
+            if (pauseBtn) {
+                pauseBtn.innerText = state.history.isPaused ? '재개' : '일시정지';
+                pauseBtn.classList.toggle('bg-emerald-700', state.history.isPaused);
+                pauseBtn.classList.toggle('hover:bg-emerald-600', state.history.isPaused);
+                pauseBtn.classList.toggle('bg-amber-700', !state.history.isPaused);
+                pauseBtn.classList.toggle('hover:bg-amber-600', !state.history.isPaused);
+            }
             state.mapLayers.borders = true;
             state.mapLayers.influence = true;
             drawCanvasMap(true);
@@ -3546,6 +3556,7 @@ function renderDungeonExplore() {
                 if (state.history.intervalId) clearTimeout(state.history.intervalId);
                 state.history.intervalId = null;
                 state.history.isRunning = false;
+                state.history.isPaused = false;
                 state.history.isPausedForEvent = false;
                 state.screen = 'title';
                 render();
@@ -3553,6 +3564,39 @@ function renderDungeonExplore() {
             }
 
             if (state.screen === 'history') {
+                if (target.closest('#btn-history-pause')) {
+                    if (state.history.isFinished) return;
+                    if (state.history.isPausedForEvent) {
+                        showToast('월드 이벤트를 먼저 선택해 주세요.');
+                        return;
+                    }
+                    state.history.isPaused = !state.history.isPaused;
+                    if (state.history.isPaused) {
+                        if (state.history.intervalId) clearTimeout(state.history.intervalId);
+                        state.history.intervalId = null;
+                        showToast('역사 시뮬레이션이 일시정지되었습니다.');
+                    } else {
+                        showToast('역사 시뮬레이션을 재개합니다.');
+                        if (state.history.isRunning) {
+                            state.history.intervalId = setTimeout(stepHistorySimulation, state.history.turnIntervalMs || 700);
+                        }
+                    }
+                    renderHistoryUI();
+                    return;
+                }
+                if (target.closest('#btn-history-event')) {
+                    if (state.history.isFinished) return;
+                    if (!state.history.isPaused) {
+                        showToast('일시정지 중에만 월드 이벤트를 선택할 수 있습니다.');
+                        return;
+                    }
+                    if (state.history.isPausedForEvent) return;
+                    state.history.pendingWorldEventChoices = generateHistoryWorldEventChoices();
+                    state.history.isPausedForEvent = true;
+                    state.history.logs.unshift(`[${state.gameDate.year + state.history.currentTurn}년] [시스템] 플레이어가 월드 이벤트 결정을 요청했습니다.`);
+                    renderHistoryUI();
+                    return;
+                }
                 if (target.closest('#btn-history-log')) {
                     openHistoryLogModal();
                     return;
