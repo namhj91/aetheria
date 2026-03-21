@@ -1362,7 +1362,7 @@ function renderDungeonExplore() {
             }
             state.mapLayers.borders = true;
             state.mapLayers.influence = true;
-            drawCanvasMap(true);
+            drawCanvasMap(false);
             renderHistoryWorldEventOverlay();
             renderHistoryLogModalContent();
         }

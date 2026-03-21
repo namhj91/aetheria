@@ -2923,7 +2923,8 @@
                     active: false,
                     nest: null,
                     cooldownTurns: 12,
-                    nextRaidTurn: 0
+                    nextRaidTurn: 0,
+                    raidRange: 28
                 }
             };
             state.history.majorFigures = [];
@@ -2959,7 +2960,8 @@
                         active: false,
                         nest: null,
                         cooldownTurns: 12,
-                        nextRaidTurn: 0
+                        nextRaidTurn: 0,
+                        raidRange: 28
                     }
                 };
             }
@@ -3204,6 +3206,12 @@
             }
         }
 
+        function generateDemonBandName() {
+            const prefixes = ['흑염', '피안', '심연', '망령', '적안', '폭풍', '파멸', '불길'];
+            const suffixes = ['군단', '전위대', '습격대', '약탈단', '사냥단', '기마대', '돌격대'];
+            return `${prefixes[Math.floor(Math.random() * prefixes.length)]} ${suffixes[Math.floor(Math.random() * suffixes.length)]}`;
+        }
+
         function activateDemonLordThreat(currentYear) {
             const threats = getHistoryThreatState();
             if (threats.demonLord.active) return;
@@ -3231,13 +3239,16 @@
             if (state.history.currentTurn >= lord.nextSpawnTurn) {
                 const band = {
                     id: `dl_band_${threats.nextBandId++}`,
+                    name: generateDemonBandName(),
                     x: lord.castle.x,
                     y: lord.castle.y,
+                    prevX: lord.castle.x,
+                    prevY: lord.castle.y,
                     power: 120 + Math.random() * 90 + (state.history.currentTurn * 0.08)
                 };
                 lord.bands.push(band);
                 lord.nextSpawnTurn += lord.spawnIntervalTurns;
-                state.history.logs.unshift(`[${currentYear}년] 🩸 [마왕군] 마왕성에서 적대적 무리 #${band.id}가 출진했습니다.`);
+                state.history.logs.unshift(`[${currentYear}년] 🩸 [마왕군] 마왕성에서 ${band.name}(${band.id})이(가) 출진했습니다.`);
             }
 
             const survivors = [];
@@ -3247,6 +3258,8 @@
                 const target = nearest.settlement;
                 const root = target.tiles[0];
                 if (!root) return;
+                band.prevX = band.x;
+                band.prevY = band.y;
                 const dx = Math.sign(root.x - band.x);
                 const dy = Math.sign(root.y - band.y);
                 band.x += dx;
@@ -3261,12 +3274,12 @@
                 const defense = computeSettlementDefensePower(target);
                 const attack = band.power + (Math.random() * 45);
                 if (defense >= attack) {
-                    state.history.logs.unshift(`[${currentYear}년] 🛡️ [마왕군] ${target.name}이(가) 침공한 적대적 무리 #${band.id}를 격파했습니다.`);
+                    state.history.logs.unshift(`[${currentYear}년] 🛡️ [마왕군] ${target.name}이(가) 침공한 ${band.name}을(를) 격파했습니다.`);
                     return;
                 }
 
                 inflictSettlementRaidDamage(target, 0.28 + Math.random() * 0.22);
-                state.history.logs.unshift(`[${currentYear}년] 🔥 [마왕군] ${target.name}이(가) 침공당해 큰 피해를 입었습니다.`);
+                state.history.logs.unshift(`[${currentYear}년] 🔥 [마왕군] ${target.name}이(가) ${band.name}의 침공으로 큰 피해를 입었습니다.`);
             });
             lord.bands = survivors;
         }
@@ -3299,6 +3312,11 @@
             const nearest = findNearestSettlementPosition(dragon.nest.x, dragon.nest.y);
             if (!nearest || !nearest.settlement) {
                 dragon.nextRaidTurn = state.history.currentTurn + dragon.cooldownTurns;
+                return;
+            }
+            if (nearest.dist > (dragon.raidRange || 28)) {
+                dragon.nextRaidTurn = state.history.currentTurn + Math.floor(dragon.cooldownTurns * 0.7);
+                state.history.logs.unshift(`[${currentYear}년] 🐉 [드래곤의 분노] 드래곤이 둥지 주변을 배회했지만 습격 가능한 거리에 정착지가 없었습니다.`);
                 return;
             }
             const target = nearest.settlement;
@@ -3587,6 +3605,10 @@
         function moveFigureToward(figure, destinationSettlement) {
             if (!destinationSettlement || !destinationSettlement.tiles || destinationSettlement.tiles.length <= 0) return false;
             const target = destinationSettlement.tiles[0];
+            figure.prevLocation = {
+                x: figure.location.x,
+                y: figure.location.y
+            };
             for (let i = 0; i < figure.speed; i++) {
                 const dx = target.x - figure.location.x;
                 const dy = target.y - figure.location.y;
@@ -4352,6 +4374,80 @@
             }
         }
 
+        function drawHistoryDynamicMarkers(ctx, viewLeft, viewTop, viewRight, viewBottom) {
+            if (!state.history) return;
+            const ts = state.tileSize;
+            const isVisible = (x, y) => x >= viewLeft && x < viewRight && y >= viewTop && y < viewBottom;
+            const drawMoveLine = (fromX, fromY, toX, toY, color = 'rgba(255,255,255,0.7)') => {
+                if (fromX === undefined || fromY === undefined) return;
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = Math.max(1, ts * 0.12);
+                ctx.beginPath();
+                ctx.moveTo((fromX + 0.5) * ts, (fromY + 0.5) * ts);
+                ctx.lineTo((toX + 0.5) * ts, (toY + 0.5) * ts);
+                ctx.stroke();
+                ctx.restore();
+            };
+            const drawMarker = (x, y, icon, color = 'rgba(15,23,42,0.9)', label = '') => {
+                if (!isVisible(x, y)) return;
+                const cx = x * ts + ts / 2;
+                const cy = y * ts + ts / 2;
+                const r = Math.max(5, ts * 0.45);
+                ctx.save();
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+                ctx.lineWidth = Math.max(1, ts * 0.1);
+                ctx.stroke();
+                ctx.font = `${Math.max(10, ts * 0.8)}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(icon, cx, cy + 1);
+                if (label && ts >= 6) {
+                    ctx.font = `${Math.max(8, ts * 0.45)}px Arial`;
+                    ctx.fillStyle = 'rgba(248,250,252,0.95)';
+                    ctx.fillText(label, cx, cy - r - 4);
+                }
+                ctx.restore();
+            };
+
+            const otherworld = getOtherworldState();
+            otherworld.cores.filter(c => c.alive).forEach(core => {
+                drawMarker(core.x, core.y, '🌀', 'rgba(126,34,206,0.9)', '핵');
+            });
+
+            const threats = getHistoryThreatState();
+            if (threats.demonLord.active && threats.demonLord.castle) {
+                drawMarker(threats.demonLord.castle.x, threats.demonLord.castle.y, '🏰', 'rgba(127,29,29,0.92)', '마왕성');
+            }
+            (threats.demonLord.bands || []).forEach(band => {
+                drawMoveLine(band.prevX, band.prevY, band.x, band.y, 'rgba(248,113,113,0.8)');
+                drawMarker(band.x, band.y, '⚔️', 'rgba(127,29,29,0.88)', band.name ? band.name.split(' ')[0] : '마왕군');
+            });
+            if (threats.dragon.active && threats.dragon.nest) {
+                drawMarker(threats.dragon.nest.x, threats.dragon.nest.y, '🐉', 'rgba(154,52,18,0.9)', '둥지');
+            }
+
+            const figures = getHistoryMajorFigures();
+            const roleIcon = {
+                hero: '🗡️',
+                saint: '✨',
+                emperor: '👑',
+                archmage: '🔮',
+                grand_marshal: '🪖'
+            };
+            figures.forEach(f => {
+                if (!f.location) return;
+                const from = f.prevLocation;
+                if (from) drawMoveLine(from.x, from.y, f.location.x, f.location.y, 'rgba(125,211,252,0.75)');
+                drawMarker(f.location.x, f.location.y, roleIcon[f.role] || '👤', 'rgba(30,41,59,0.9)', f.title || '주요 인물');
+            });
+        }
+
         function drawCanvasMap(resetCenter = false) {
             const canvas = document.getElementById('world-canvas');
             const playerCanvas = document.getElementById('player-canvas');
@@ -4519,6 +4615,8 @@
                 });
                 ctx.restore();
             }
+
+            drawHistoryDynamicMarkers(ctx, viewLeft, viewTop, viewRight, viewBottom);
 
             // 격자선 및 하단 기능 유지
             if (state.tileSize > 15) {
