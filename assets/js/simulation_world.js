@@ -2756,6 +2756,7 @@
             if (s.population >= 6000) {
                 add('mage_tower', 0.5);
                 add('alchemy_lab', 0.6);
+                add('grand_cathedral', 0.22);
             }
             if (s.population >= 15000) {
                 add('castle', 0.8);
@@ -3585,7 +3586,7 @@
             if (hasMajorFigureRole('saint')) return;
             if (!state.settlements || state.settlements.length <= 0) return;
             if (!state.history.holyNationId) return;
-            const holySettlements = state.settlements.filter(s => s.buildings && s.buildings.includes('grand_cathedral') && s.nationId === state.history.holyNationId);
+            const holySettlements = state.settlements.filter(s => s.buildings && (s.buildings.includes('grand_cathedral') || s.buildings.includes('chapel')) && s.nationId === state.history.holyNationId);
             if (holySettlements.length <= 0) return;
             let target = holySettlements.sort((a, b) => (b.population || 0) - (a.population || 0))[0];
             createHistoryMajorFigure('saint', currentYear, sortedNations, {
@@ -3599,7 +3600,7 @@
             if (!state.settlements || state.settlements.length <= 0) return;
 
             const holySeat = state.settlements
-                .filter(s => s.buildings && s.buildings.includes('grand_cathedral') && getSettlementTierRank(s.type) >= getSettlementTierRank('town'))
+                .filter(s => s.buildings && (s.buildings.includes('grand_cathedral') || s.buildings.includes('chapel')) && getSettlementTierRank(s.type) >= getSettlementTierRank('village'))
                 .sort((a, b) => (b.population || 0) - (a.population || 0))[0];
             if (!holySeat) return;
 
@@ -3725,9 +3726,9 @@
             heroFigure.recruitAttemptedNpcIds.push(candidateFigure.npcId);
             if (joined) {
                 if (!heroFigure.companionNpcIds.includes(candidateFigure.npcId)) heroFigure.companionNpcIds.push(candidateFigure.npcId);
-                state.history.logs.unshift(`[${currentYear}년] 🤝 [용사단] ${candNpc.name}이(가) 용사단에 합류했습니다. (상성 ${affinity})`);
+                state.history.logs.unshift(`[${currentYear}년] 🤝 [용사일행] ${candNpc.name}이(가) 용사일행에 합류했습니다. (상성 ${affinity})`);
             } else {
-                state.history.logs.unshift(`[${currentYear}년] 🚪 [용사단] ${candNpc.name}이(가) 제안을 거절했습니다. (상성 ${affinity})`);
+                state.history.logs.unshift(`[${currentYear}년] 🚪 [용사일행] ${candNpc.name}이(가) 제안을 거절했습니다. (상성 ${affinity})`);
             }
             return joined;
         }
@@ -3769,7 +3770,7 @@
                 if (!holyNationId) return null;
                 const holyHome = state.settlements.find(s => s.id === figure.homeSettlementId && s.nationId === holyNationId);
                 if (holyHome) return holyHome;
-                const holyNationCathedral = state.settlements.find(s => s.nationId === holyNationId && s.buildings && s.buildings.includes('grand_cathedral'));
+                const holyNationCathedral = state.settlements.find(s => s.nationId === holyNationId && s.buildings && (s.buildings.includes('grand_cathedral') || s.buildings.includes('chapel')));
                 if (holyNationCathedral) return holyNationCathedral;
                 return state.settlements.find(s => s.nationId === holyNationId) || null;
             }
@@ -3833,6 +3834,8 @@
         function applyMajorFigureArrivalEffects(figure, destinationSettlement, currentYear) {
             if (!destinationSettlement) return;
             if (figure.role === 'hero') {
+                const heroNpc = state.npcs.find(n => n.id === figure.npcId);
+                const companions = figure.companionNpcIds?.length || 0;
                 if (!figure.recruitmentResolved) {
                     const recruitCandidate = getHistoryMajorFigures().find(f => {
                         if (f.npcId === figure.npcId) return false;
@@ -3846,32 +3849,75 @@
                     }
                     if (!findNearestFigureForRecruitment(figure)) {
                         figure.recruitmentResolved = true;
-                        state.history.logs.unshift(`[${currentYear}년] 🛡️ [용사단] 모집을 마친 용사단이 위협 전선으로 출정합니다.`);
+                        state.history.logs.unshift(`[${currentYear}년] 🛡️ [용사일행] 재편을 마친 용사일행이 위협 전선으로 출정합니다.`);
                     }
                 }
 
-                const companionBonus = (figure.companionNpcIds?.length || 0) * 0.12;
-                const o = getOtherworldState();
-                const core = o.cores.find(c => c.alive && Math.abs(c.x - figure.location.x) + Math.abs(c.y - figure.location.y) <= 3);
-                if (core) {
-                    if (Math.random() < (0.45 + companionBonus)) {
-                        destroyOtherworldCore(core, currentYear, 'settlement_defense');
-                        state.history.logs.unshift(`[${currentYear}년] ⚔️ [용사단] 용사단이 전선을 돌파해 이계 중심핵을 파괴했습니다.`);
-                    } else {
-                        state.history.logs.unshift(`[${currentYear}년] ⚔️ [용사단] 이계 핵 공략에 실패했지만 전선을 유지했습니다.`);
+                const companionBonus = companions * 0.12;
+                const heroStatAvg = heroNpc && heroNpc.finalStats ? ((heroNpc.finalStats.str + heroNpc.finalStats.mag + heroNpc.finalStats.agi + heroNpc.finalStats.cha) / 4) : 40;
+                const trainingBonus = (figure.assaultTrainingLevel || 0) * 10;
+                const heroAssaultPower = heroStatAvg + (companions * 8) + trainingBonus;
+                const resolveHeroAssault = (difficulty, successLog, failSubject) => {
+                    const chance = Math.max(0.2, Math.min(0.92, 0.35 + ((heroAssaultPower - difficulty) / 220)));
+                    const success = Math.random() < chance;
+                    if (success) {
+                        state.history.logs.unshift(`[${currentYear}년] ✅ [용사일행] ${successLog} (성공률 ${(chance * 100).toFixed(0)}%)`);
+                        return true;
                     }
+                    figure.recruitmentResolved = false;
+                    figure.recruitAttemptedNpcIds = [];
+                    if (Math.random() < 0.5) {
+                        state.history.logs.unshift(`[${currentYear}년] ↩️ [용사일행] ${failSubject} 공략에 실패해 후퇴했습니다. 일행 재모집 후 재도전을 준비합니다.`);
+                    } else {
+                        figure.assaultTrainingLevel = (figure.assaultTrainingLevel || 0) + 1;
+                        if (heroNpc && heroNpc.finalStats) {
+                            heroNpc.finalStats.str += 1 + Math.floor(Math.random() * 2);
+                            heroNpc.finalStats.mag += 1 + Math.floor(Math.random() * 2);
+                            heroNpc.finalStats.agi += 1 + Math.floor(Math.random() * 2);
+                            heroNpc.finalStats.cha += 1 + Math.floor(Math.random() * 2);
+                        }
+                        state.history.logs.unshift(`[${currentYear}년] 🧭 [용사일행] ${failSubject} 공략에 실패해 후퇴했습니다. 재정비·훈련으로 전력을 끌어올렸습니다.`);
+                    }
+                    return false;
+                };
+                const o = getOtherworldState();
+                const core = o.cores.find(c => c.alive && Math.abs(c.x - figure.location.x) + Math.abs(c.y - figure.location.y) <= 4);
+                if (core) {
+                    if (!resolveHeroAssault(120 + (core.generation * 25) + (core.radius * 12), '용사일행이 이계 중심핵을 완전히 파괴했습니다.', '이계 중심핵')) return;
+                    destroyOtherworldCore(core, currentYear, 'settlement_defense');
                     return;
                 }
                 const t = getHistoryThreatState();
+                if (t.demonLord.active && t.demonLord.castle) {
+                    const nearCastle = Math.abs(t.demonLord.castle.x - figure.location.x) + Math.abs(t.demonLord.castle.y - figure.location.y) <= 4;
+                    if (nearCastle) {
+                        if (!resolveHeroAssault(165 + (t.demonLord.bands.length * 12), '용사일행이 마왕성을 함락해 마왕군의 근원을 제거했습니다.', '마왕성')) return;
+                        const castleTile = state.worldMap[t.demonLord.castle.y] && state.worldMap[t.demonLord.castle.y][t.demonLord.castle.x];
+                        if (castleTile && castleTile.type === 'demon_castle') castleTile.type = 'mountain';
+                        t.demonLord.active = false;
+                        t.demonLord.castle = null;
+                        t.demonLord.bands = [];
+                        return;
+                    }
+                }
                 if (t.demonLord.bands.length > 0) {
-                    const kills = Math.max(1, Math.min(t.demonLord.bands.length, 1 + Math.floor((figure.companionNpcIds?.length || 0) / 2)));
+                    if (!resolveHeroAssault(110 + (t.demonLord.bands.length * 8), `용사일행이 마왕군 ${t.demonLord.bands.length}개 부대를 섬멸했습니다.`, '마왕군')) return;
+                    const kills = t.demonLord.bands.length;
                     t.demonLord.bands.splice(0, kills);
-                    state.history.logs.unshift(`[${currentYear}년] ⚔️ [용사단] 용사단이 마왕군 ${kills}개 부대를 격퇴했습니다.`);
                     return;
                 }
                 if (t.dragon.active) {
-                    t.dragon.nextRaidTurn += Math.floor(t.dragon.cooldownTurns * (0.5 + companionBonus));
-                    state.history.logs.unshift(`[${currentYear}년] 🛡️ [용사단] 용사단의 교란으로 드래곤의 공세가 지연되었습니다.`);
+                    const nearNest = t.dragon.nest && Math.abs(t.dragon.nest.x - figure.location.x) + Math.abs(t.dragon.nest.y - figure.location.y) <= 4;
+                    if (nearNest) {
+                        if (!resolveHeroAssault(170, '용사일행이 드래곤을 토벌해 위협을 종결했습니다.', '드래곤')) return;
+                        const nestTile = state.worldMap[t.dragon.nest.y] && state.worldMap[t.dragon.nest.y][t.dragon.nest.x];
+                        if (nestTile && nestTile.type === 'dragon_peak') nestTile.type = 'mountain';
+                        t.dragon.active = false;
+                        t.dragon.nest = null;
+                    } else {
+                        t.dragon.nextRaidTurn += Math.floor(t.dragon.cooldownTurns * (0.5 + companionBonus));
+                        state.history.logs.unshift(`[${currentYear}년] ⚔️ [용사일행] 용사일행이 드래곤을 추격하며 둥지 공략을 준비합니다.`);
+                    }
                 }
                 return;
             }
