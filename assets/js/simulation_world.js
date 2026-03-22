@@ -459,6 +459,7 @@
 
         function updateSettlementFoodAndPopulation(s, weeks = 1, isHistory = false, modifiers = null) {
             if (!s) return;
+            if (s.type === 'ruins') return;
             if (!s.influencedTiles) {
                 s.influencedTiles = [...s.tiles];
                 s.tiles.forEach(t => {
@@ -512,6 +513,42 @@
             }
 
             if (s.popCap && s.population > s.popCap) s.population = s.popCap;
+        }
+
+        function collapseSettlementToRuins(settlement, currentYear, causeLabel = '재앙') {
+            if (!settlement || settlement.type === 'ruins') return;
+            const oldName = settlement.name;
+            const leader = settlement.leaderId ? getLeaderEntity(settlement.leaderId) : null;
+            if (leader && (leader.status === '국왕' || leader.status === '성왕')) leader.status = '재야';
+
+            settlement.population = 0;
+            settlement.type = 'ruins';
+            settlement.nationId = null;
+            settlement.leaderId = null;
+            settlement.buildings = [];
+            settlement.food = 0;
+            settlement.foodCap = 0;
+            settlement.foodProduction = 0;
+            settlement.foodConsumption = 0;
+            settlement.security = 0;
+            settlement.influencedTiles = [];
+            settlement.isRuins = true;
+            if (!String(settlement.name || '').includes('폐허')) settlement.name = `${oldName} 폐허`;
+
+            state.worldMap.forEach(row => row.forEach(tile => {
+                if (tile.influencedBy === settlement.id) tile.influencedBy = null;
+                if (tile.settlementId === settlement.id) tile.nationId = null;
+            }));
+            if (settlement.tiles) {
+                settlement.tiles.forEach(t => {
+                    const tile = state.worldMap[t.y] && state.worldMap[t.y][t.x];
+                    if (!tile) return;
+                    tile.settlementId = settlement.id;
+                    tile.nationId = null;
+                    tile.type = 'ruins';
+                });
+            }
+            state.history.logs.unshift(`[${currentYear}년] 🏚️ [멸망] ${oldName}이(가) ${causeLabel}로 붕괴해 폐허가 되었습니다.`);
         }
 
         function processEntityActionStep(ent, apAmount) {
@@ -2862,6 +2899,10 @@
         function processHistorySettlements(weeks = 100, settlementModifiers = null) {
             state.settlements.forEach(s => {
                 updateSettlementFoodAndPopulation(s, weeks, true, settlementModifiers);
+                if ((s.population || 0) <= 0) {
+                    collapseSettlementToRuins(s, state.gameDate.year + state.history.currentTurn + weeks, '인구 소멸');
+                    return;
+                }
                 checkSettlementUpgrades(s);
                 processCultureExpansion(s, weeks, true);
                 foundNationFromSettlement(s, true);
@@ -2914,6 +2955,8 @@
                 cores: [],
                 tiles: {},
                 splitRadius: 6,
+                minCoreRadius: 4,
+                maxCoreRadius: 8,
                 battleRange: 2,
                 minExpansionSteps: 1,
                 maxExpansionSteps: 3
@@ -2950,6 +2993,8 @@
                     cores: [],
                     tiles: {},
                     splitRadius: 6,
+                    minCoreRadius: 4,
+                    maxCoreRadius: 8,
                     battleRange: 2,
                     minExpansionSteps: 1,
                     maxExpansionSteps: 3
@@ -3034,6 +3079,8 @@
 
         function spawnOtherworldCore(x, y, generation = 0, parentId = null) {
             const o = getOtherworldState();
+            const minRadius = Math.max(2, (o.minCoreRadius || 4) - Math.min(2, generation));
+            const maxRadius = Math.max(minRadius + 1, (o.maxCoreRadius || 8) - generation);
             const core = {
                 id: o.nextCoreId++,
                 x,
@@ -3041,6 +3088,7 @@
                 generation,
                 parentId,
                 radius: 0,
+                maxRadius: minRadius + Math.floor(Math.random() * ((maxRadius - minRadius) + 1)),
                 spawnedChild: false,
                 alive: true,
                 corruptedKeys: []
@@ -3063,27 +3111,65 @@
             state.history.logs.unshift(`[${currentYear}년] 🌀 [월드 이벤트] 이계 중심핵이 (${core.x}, ${core.y})에 생성되었습니다.`);
         }
 
+        function getOtherworldExpansionCandidates(core) {
+            const seen = new Set();
+            const candidates = [];
+            const dirs = [
+                [0, 1],
+                [1, 0],
+                [0, -1],
+                [-1, 0],
+                [1, 1],
+                [1, -1],
+                [-1, 1],
+                [-1, -1]
+            ];
+            core.corruptedKeys.forEach(key => {
+                const [sx, sy] = key.split(',').map(v => parseInt(v, 10));
+                dirs.forEach(d => {
+                    const tx = sx + d[0];
+                    const ty = sy + d[1];
+                    const cKey = getOtherworldKey(tx, ty);
+                    if (seen.has(cKey)) return;
+                    seen.add(cKey);
+                    if (tx < 0 || tx >= MAP_SIZE || ty < 0 || ty >= MAP_SIZE) return;
+                    const tile = state.worldMap[ty] && state.worldMap[ty][tx];
+                    if (!tile) return;
+                    if (tile.type === 'deep_water' || tile.type === 'water' || tile.type === 'lake') return;
+                    const o = getOtherworldState();
+                    const tState = o.tiles[cKey];
+                    if (tState && tState.coreIds && tState.coreIds.includes(core.id)) return;
+                    let score = 1 + Math.random() * 1.8;
+                    if (tile.settlementId) score += 0.5;
+                    if (Math.random() < 0.25) score += 1.2;
+                    candidates.push({
+                        x: tx,
+                        y: ty,
+                        score
+                    });
+                });
+            });
+            return candidates.sort((a, b) => b.score - a.score);
+        }
+
         function expandOtherworldCore(core) {
             if (!core.alive) return;
-            const nextRadius = core.radius + 1;
-            const ringTiles = [];
-            for (let dy = -nextRadius; dy <= nextRadius; dy++) {
-                for (let dx = -nextRadius; dx <= nextRadius; dx++) {
-                    const manhattan = Math.abs(dx) + Math.abs(dy);
-                    if (manhattan !== nextRadius) continue;
-                    const tx = core.x + dx;
-                    const ty = core.y + dy;
-                    if (tx < 0 || tx >= MAP_SIZE || ty < 0 || ty >= MAP_SIZE) continue;
-                    markOtherworldCorruption(core, tx, ty);
-                    ringTiles.push({
-                        x: tx,
-                        y: ty
-                    });
-                }
+            const candidates = getOtherworldExpansionCandidates(core);
+            if (candidates.length <= 0) return;
+
+            const rangeLimited = core.radius >= core.maxRadius;
+            const spreadCount = rangeLimited ? (1 + Math.floor(Math.random() * 2)) : (3 + Math.floor(Math.random() * 5));
+            let spread = 0;
+            for (let i = 0; i < candidates.length && spread < spreadCount; i++) {
+                if (Math.random() < 0.28) continue;
+                markOtherworldCorruption(core, candidates[i].x, candidates[i].y);
+                spread++;
             }
-            core.radius = nextRadius;
-            if (!core.spawnedChild && core.radius >= getOtherworldState().splitRadius && ringTiles.length > 0) {
-                const pos = ringTiles[Math.floor(Math.random() * ringTiles.length)];
+            if (!rangeLimited) core.radius += 1;
+
+            if (!core.spawnedChild && core.radius >= core.maxRadius && candidates.length > 0) {
+                const childPool = candidates.slice(0, Math.min(8, candidates.length));
+                const pos = childPool[Math.floor(Math.random() * childPool.length)];
                 spawnOtherworldCore(pos.x, pos.y, core.generation + 1, core.id);
                 core.spawnedChild = true;
             }
@@ -3140,14 +3226,7 @@
                     const lossRate = 0.35 + Math.random() * 0.3;
                     settlement.population = Math.max(0, Math.floor((settlement.population || 0) * (1 - lossRate)));
                     if (settlement.population <= 0 || Math.random() < 0.22) {
-                        const root = settlement.tiles[0];
-                        if (state.worldMap[root.y] && state.worldMap[root.y][root.x]) {
-                            state.worldMap[root.y][root.x].settlementId = null;
-                        }
-                        settlement.nationId = null;
-                        settlement.type = 'camp';
-                        settlement.buildings = [];
-                        state.history.logs.unshift(`[${currentYear}년] ☠️ [이계 전선] ${settlement.name} 정착지가 이계 침식에 함락되었습니다.`);
+                        collapseSettlementToRuins(settlement, currentYear, '이계 침식');
                     } else {
                         checkSettlementUpgrades(settlement);
                         state.history.logs.unshift(`[${currentYear}년] ⚔️ [이계 전선] ${settlement.name} 정착지가 이계 군세와 격돌해 큰 피해를 입었습니다.`);
@@ -3221,9 +3300,7 @@
                 settlement.buildings.splice(Math.floor(Math.random() * settlement.buildings.length), 1);
             }
             if (settlement.population <= 0) {
-                settlement.type = 'camp';
-                settlement.nationId = null;
-                settlement.buildings = [];
+                collapseSettlementToRuins(settlement, state.gameDate.year + state.history.currentTurn, '약탈');
             } else {
                 checkSettlementUpgrades(settlement);
             }
@@ -3571,11 +3648,26 @@
 
         function maybeSpawnSwordSaint(currentYear, sortedNations = []) {
             if (hasMajorFigureRole('sword_saint')) return;
-            const martialSettlements = state.settlements.filter(s => s.buildings && (s.buildings.includes('dojo') || s.buildings.includes('arena') || s.buildings.includes('training_ground')));
+            const nationPowerList = state.history.nations.map(n => {
+                const settlements = state.settlements.filter(s => s.nationId === n.id);
+                const militaryPower = settlements.reduce((sum, s) => {
+                    const militaryBuildings = (s.buildings || []).filter(b => b === 'training_ground' || b === 'guardhouse' || b === 'castle' || b === 'dojo' || b === 'arena').length;
+                    return sum + (militaryBuildings * 45) + Math.sqrt(Math.max(1, s.population || 1)) * 3;
+                }, 0);
+                return {
+                    nationId: n.id,
+                    militaryPower
+                };
+            }).sort((a, b) => b.militaryPower - a.militaryPower);
+
+            const strongNation = nationPowerList.find(n => n.militaryPower >= 520);
+            if (!strongNation) return;
+            const martialSettlements = state.settlements.filter(s => s.nationId === strongNation.nationId && s.buildings && (s.buildings.includes('dojo') || s.buildings.includes('arena') || s.buildings.includes('training_ground')));
             if (martialSettlements.length <= 0) return;
             const target = martialSettlements.sort((a, b) => (b.population || 0) - (a.population || 0))[0];
             createHistoryMajorFigure('sword_saint', currentYear, sortedNations, {
-                targetSettlement: target
+                targetSettlement: target,
+                homeNationId: strongNation.nationId
             });
         }
 
@@ -3841,7 +3933,8 @@
         function generateHistoryWorldEventChoices() {
             const threats = getHistoryThreatState();
             const otherworld = getOtherworldState();
-            const heroChoiceAvailable = otherworld.active && threats.demonLord.active && threats.dragon.active && !hasMajorFigureRole('hero');
+            const activeThreatCount = (otherworld.active ? 1 : 0) + (threats.demonLord.active ? 1 : 0) + (threats.dragon.active ? 1 : 0);
+            const heroChoiceAvailable = activeThreatCount >= 1 && !hasMajorFigureRole('hero');
 
             const pool = [{
                     id: 'golden_age',
@@ -5000,7 +5093,8 @@
         }
 
         function drawMiniMap() {
-            if (state.inGameTab !== 'map' || state.minimapCollapsed) return;
+            const isWorldMapVisible = (state.inGameTab === 'map') || state.screen === 'history';
+            if (!isWorldMapVisible || state.minimapCollapsed) return;
             const wrapper = getEl('map-wrapper');
             if (!wrapper || !state.worldMap) return;
             const resized = resizeMiniMapCanvas();

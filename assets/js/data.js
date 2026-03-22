@@ -27,6 +27,13 @@
 
         // --- 외부(클라우드/로컬)에서 불러올 수 있는 핵심 데이터셋 ---
         let SETTLEMENT_TIERS = {
+            ruins: {
+                id: 'ruins',
+                name: '폐허',
+                minPop: 0,
+                maxTiles: 1,
+                icon: '🏚️'
+            },
             camp: {
                 id: 'camp',
                 name: '정착지',
